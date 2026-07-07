@@ -2,7 +2,7 @@
 
 import { OrganizationId, ProposalId, TenantId, UserId } from '../shared/ids';
 
-export type ProposalStatus = 'received' | 'extracting' | 'extracted';
+export type ProposalStatus = 'received' | 'extracting' | 'extracted' | 'evaluated';
 
 export class Proposal {
   private constructor(
@@ -37,13 +37,34 @@ export class Proposal {
     );
   }
 
-  startExtraction(): Proposal {
+  /** Reconstruye la entidad desde una fila de base de datos, con su estado real. */
+  static fromPersistence(params: {
+    id: ProposalId;
+    tenantId: TenantId;
+    organizationId: OrganizationId;
+    title: string;
+    status: ProposalStatus;
+    createdBy: UserId | null;
+    createdAt: Date;
+  }): Proposal {
+    return new Proposal(
+      params.id,
+      params.tenantId,
+      params.organizationId,
+      params.title,
+      params.status,
+      params.createdBy,
+      params.createdAt,
+    );
+  }
+
+  markExtracted(): Proposal {
     return new Proposal(
       this.id,
       this.tenantId,
       this.organizationId,
       this.title,
-      'extracting',
+      'extracted',
       this.createdBy,
       this.createdAt,
     );

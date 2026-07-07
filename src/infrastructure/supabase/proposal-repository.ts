@@ -23,11 +23,12 @@ interface ProposalRow {
 }
 
 function toDomain(row: ProposalRow): Proposal {
-  return Proposal.create({
+  return Proposal.fromPersistence({
     id: asProposalId(row.id),
     tenantId: asTenantId(row.tenant_id),
     organizationId: asOrganizationId(row.organization_id),
     title: row.title,
+    status: row.status,
     createdBy: row.created_by ? asUserId(row.created_by) : null,
     createdAt: new Date(row.created_at),
   });

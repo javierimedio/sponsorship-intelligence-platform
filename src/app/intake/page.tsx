@@ -21,11 +21,13 @@ export default async function IntakePage() {
 
   return (
     <main style={{ padding: 32, fontFamily: 'sans-serif', maxWidth: 560 }}>
-      <h1>Intake &amp; Extraction — Fase 1</h1>
+      <h1>Intake &amp; Extraction — Evaluation — Fase 1</h1>
       <p style={{ color: '#666' }}>
-        Crea una propuesta y sube un documento de prueba. El archivo se sube directamente a
-        Supabase Storage (protegido por RLS a tu organización); solo los metadatos pasan por
-        nuestra API.
+        Crea una propuesta, sube un documento y el sistema encadena automáticamente:
+        Agente 1 (extracción con Claude) → Agentes 2/3/5 (scoring, riesgo y financials, en
+        paralelo) → recomendación determinista. El archivo se sube directamente a Supabase
+        Storage (protegido por RLS a tu organización); solo los metadatos y el resultado
+        pasan por nuestra API.
       </p>
       <IntakeForm organizationId={profile.organizationId} />
       <p style={{ marginTop: 24 }}>

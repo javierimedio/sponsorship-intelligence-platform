@@ -1,4 +1,8 @@
 // middleware.ts (raíz del proyecto)
+// Refresca el token de sesión de Supabase en cada request. Sin esto, la sesión
+// expira silenciosamente y createSupabaseServerClient() dejaría de ver al usuario
+// aunque el navegador todavía tenga la cookie.
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 

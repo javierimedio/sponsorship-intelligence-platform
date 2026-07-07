@@ -37,9 +37,13 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
    supabase/migrations/0009_proposals_minimal.sql
    supabase/migrations/0010_documents_and_storage.sql
    supabase/migrations/0011_ai_extractions.sql
+   supabase/migrations/0012_evaluation_catalog.sql
+   supabase/migrations/0013_evaluation_results.sql
    ```
 3. En el dashboard de Supabase: **Authentication → Hooks → Custom Access Token Hook** → apuntar a `public.custom_access_token_hook` (no se puede activar por SQL).
-4. (Opcional, solo en el proyecto de desarrollo) cargar `supabase/migrations/seed_dev_tenancy.sql` — son datos ficticios, nunca reales.
+4. (Opcional, solo en el proyecto de desarrollo) cargar los seeds — son datos ficticios, nunca reales:
+   - `supabase/migrations/seed_dev_tenancy.sql`
+   - `supabase/migrations/seed_dev_evaluation_catalog.sql`
 5. Crea manualmente un usuario en **Authentication → Users** y vincúlalo a un perfil:
    ```sql
    insert into profiles (id, tenant_id, organization_id, full_name, role)
@@ -47,7 +51,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
           '00000000-0000-0000-0000-000000000011', 'Tu nombre', 'org_admin'
    from auth.users u where u.email = 'tu@email.com';
    ```
-6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo.
+6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo **y una clave de Gemini real** (`GEMINI_API_KEY`, gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey)) — sin ella, el Agente 1 y los Agentes 2/3/5 fallarán. `AI_PROVIDER=gemini` es el valor por defecto; para volver a Claude, cambia esa variable a `anthropic` y rellena `ANTHROPIC_API_KEY` en su lugar — ningún código cambia.
 7. `npm install`
 8. `npm run dev`
 
@@ -56,7 +60,23 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
 - El claim del JWT para el rol de negocio **nunca** debe llamarse `role` — es un nombre reservado que usa PostgREST para decidir con qué rol de PostgreSQL ejecutar cada request. Lo llamamos `app_role`.
 - El Auth Hook necesita `security definer` + `grant select` explícito a `supabase_auth_admin` sobre `profiles`, porque si no, la RLS de esa tabla bloquea al propio hook y el login devuelve 500.
 - Activar el Auth Hook en el dashboard es un paso manual — no se puede hacer por SQL.
+- El middleware de Next.js necesita tipar explícitamente `CookieOptions` (de `@supabase/ssr`) en los parámetros `options` de `set`/`remove`, o falla la comprobación de tipos en build (aunque compile bien en local con `strict: false`).
+
+## Estado actual (Fase 1, MVP funcionando de extremo a extremo)
+
+- **Tenant/Organization/Brand + Auth + RLS**: verificado en producción.
+- **Intake & Extraction**: crear propuesta, subir documento a Storage, Agente 1 (Claude) extrae datos estructurados.
+- **Evaluation**: Agentes 2/3/5 (scoring, riesgo, financials) en paralelo sobre el catálogo de la organización, con recomendación determinista.
+
+**Simplificaciones deliberadas de este MVP** frente al diseño completo de los Documentos 3-4 (para que exista algo funcionando de extremo a extremo antes de añadir sofisticación):
+- No hay `scoring_model_versions` ni Rule Engine configurable todavía — los pesos/catálogos son fijos por organización, editables directamente en las tablas.
+- La recomendación final es una función con umbral fijo en código (`computeRecommendation`), no una tabla `recommendation_rules` configurable.
+- No hay Global Confidence Score, `human_feedback`, ni Knowledge Engine — quedan para cuando haya histórico real que aprovechar.
+- El proveedor de IA por defecto es **Gemini** (capa gratuita), no Claude — decisión de presupuesto, no de arquitectura. El puerto `AIProvider` es idéntico para ambos; cambiar de uno a otro es la variable de entorno `AI_PROVIDER`, nunca código. Los nombres de modelo de Gemini cambian con cierta frecuencia — si `gemini-2.0-flash` deja de estar en la capa gratuita, actualiza la constante `MODEL` en `gemini-provider.ts` consultando https://ai.google.dev/gemini-api/docs/models.
 
 ## Siguiente paso de desarrollo
 
-Con Tenant/Auth/RLS e Intake & Extraction levantados (crear una propuesta desde `/intake`, subir un documento, verlo registrado en `documents`), el siguiente módulo es conectar el **Agente 1 (extracción)**: al confirmarse la subida, una función procesa el documento y rellena `ai_extractions` con el contenido normalizado, siguiendo el mismo patrón (migración → dominio → caso de uso → adapter) que ya está establecido.
+Con Intake + Evaluation funcionando end-to-end, las líneas naturales desde aquí son:
+1. **Aprobación**: un flujo simple de aprobar/rechazar sobre el `recommendation` calculado (antes del Rule Engine completo).
+2. **Probar con documentos reales anonimizados** — es el momento de validar si el catálogo de scoring/riesgo semilla tiene sentido para el negocio real, antes de construir más encima.
+3. Endurecer el MVP: versionado de modelo, Rule Engine, panel de configuración del catálogo (hoy solo editable por SQL).

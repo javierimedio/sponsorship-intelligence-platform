@@ -1,0 +1,130 @@
+// src/infrastructure/ai/anthropic-provider.ts
+// Implementación concreta del puerto AIProvider usando Claude.
+// Sustituir por OpenAI (u otro) es escribir esta misma interfaz en otro archivo —
+// ningún caso de uso ni componente de dominio se entera del cambio.
+
+import Anthropic from '@anthropic-ai/sdk';
+import {
+  AIProvider,
+  EconomicConceptInput,
+  EconomicConceptResult,
+  RiskFactorInput,
+  RiskFactorResult,
+  ScoringAttributeInput,
+  ScoringAttributeResult,
+} from '../../domain/shared/ai-provider';
+
+const MODEL = 'claude-sonnet-5';
+
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+}
+
+async function askClaudeForJson(
+  system: string,
+  userText: string,
+  file?: { buffer: Buffer; mediaType: string },
+): Promise<unknown> {
+  const client = getClient();
+  const content: Anthropic.Messages.ContentBlockParam[] = [];
+
+  if (file) {
+    content.push({
+      type: 'document',
+      source: {
+        type: 'base64',
+        media_type: file.mediaType as 'application/pdf',
+        data: file.buffer.toString('base64'),
+      },
+    });
+  }
+  content.push({ type: 'text', text: userText });
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system,
+    messages: [{ role: 'user', content }],
+  });
+
+  const textBlock = response.content.find((block) => block.type === 'text');
+  const raw = textBlock && 'text' in textBlock ? textBlock.text : '{}';
+  const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error(`El modelo no devolvió JSON válido: ${cleaned.slice(0, 200)}`);
+  }
+}
+
+export class AnthropicProvider implements AIProvider {
+  async extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>> {
+    const system =
+      'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
+      'Lee el documento y devuelve ÚNICAMENTE un objeto JSON (sin texto adicional, sin markdown) ' +
+      'con esta forma exacta: {"requester_name": string|null, "requester_org": string|null, ' +
+      '"collaboration_type": string|null, "summary": string, "assets_offered": string[], ' +
+      '"estimated_total_amount": number|null, "currency": string|null, ' +
+      '"opportunities": string[], "risks": string[]}. ' +
+      'Si un dato no aparece en el documento, usa null. No inventes datos que no estén en el texto.';
+
+    const result = await askClaudeForJson(
+      system,
+      'Extrae la información de este documento de propuesta de colaboración.',
+      { buffer: fileBuffer, mediaType },
+    );
+    return result as Record<string, unknown>;
+  }
+
+  async scoreAttributes(
+    extractedData: Record<string, unknown>,
+    attributes: ScoringAttributeInput[],
+  ): Promise<ScoringAttributeResult[]> {
+    if (!attributes.length) return [];
+
+    const system =
+      'Eres el Agente de Evaluación de una plataforma de gestión de patrocinios. ' +
+      'Para cada atributo de la lista, puntúa entre 0 y su maxScore según la información extraída. ' +
+      'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
+      '{"attributeId": string, "score": number, "rationale": string}. ' +
+      'El "score" nunca debe superar el "maxScore" indicado para ese atributo.';
+
+    const result = await askClaudeForJson(system, JSON.stringify({ extractedData, attributes }));
+    return Array.isArray(result) ? (result as ScoringAttributeResult[]) : [];
+  }
+
+  async evaluateRiskFactors(
+    extractedData: Record<string, unknown>,
+    factors: RiskFactorInput[],
+  ): Promise<RiskFactorResult[]> {
+    if (!factors.length) return [];
+
+    const system =
+      'Eres el Agente de Riesgo de una plataforma de gestión de patrocinios. ' +
+      'Para cada factor de riesgo de la lista, evalúa su "level" (probabilidad) e "impact" ' +
+      '(gravedad) según la información extraída, usando SOLO "Alto", "Medio" o "Bajo". ' +
+      'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
+      '{"factorId": string, "level": "Alto"|"Medio"|"Bajo", "impact": "Alto"|"Medio"|"Bajo"}.';
+
+    const result = await askClaudeForJson(system, JSON.stringify({ extractedData, factors }));
+    return Array.isArray(result) ? (result as RiskFactorResult[]) : [];
+  }
+
+  async extractFinancialLines(
+    extractedData: Record<string, unknown>,
+    concepts: EconomicConceptInput[],
+  ): Promise<EconomicConceptResult[]> {
+    if (!concepts.length) return [];
+
+    const system =
+      'Eres el Agente de ROI/Financials de una plataforma de gestión de patrocinios. ' +
+      'Para cada concepto económico de la lista, estima su importe en euros según la ' +
+      'información extraída. Si no hay datos suficientes, usa null — no inventes cifras. ' +
+      'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
+      '{"conceptId": string, "estimatedAmount": number|null}.';
+
+    const result = await askClaudeForJson(system, JSON.stringify({ extractedData, concepts }));
+    return Array.isArray(result) ? (result as EconomicConceptResult[]) : [];
+  }
+}
