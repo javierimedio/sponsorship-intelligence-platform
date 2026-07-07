@@ -26,14 +26,15 @@ async function askClaudeForJson(
   file?: { buffer: Buffer; mediaType: string },
 ): Promise<unknown> {
   const client = getClient();
-  const content: Anthropic.Messages.ContentBlockParam[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const content: any[] = [];
 
   if (file) {
     content.push({
       type: 'document',
       source: {
         type: 'base64',
-        media_type: file.mediaType as 'application/pdf',
+        media_type: file.mediaType,
         data: file.buffer.toString('base64'),
       },
     });
