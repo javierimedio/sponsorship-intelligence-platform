@@ -38,6 +38,16 @@ const STEP_LABEL: Record<Step, string> = {
   error: '',
 };
 
+// Supabase Storage no admite espacios ni caracteres acentuados en la ruta del objeto.
+// El nombre "bonito" original se guarda igualmente en `documents.original_filename`
+// para mostrarlo en la UI — esto solo afecta a la ruta física del archivo.
+function sanitizeFilename(filename: string): string {
+  return filename
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita acentos (á→a, ó→o, ñ se trata aparte abajo)
+    .replace(/[^a-zA-Z0-9.\-_]/g, '_'); // cualquier otro carácter (espacios, ñ, etc.) → "_"
+}
+
 export function IntakeForm({ organizationId }: IntakeFormProps) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -77,7 +87,7 @@ export function IntakeForm({ organizationId }: IntakeFormProps) {
       // 2. Subir el archivo directamente a Storage
       setStep('uploading');
       const supabase = createSupabaseBrowserClient();
-      const storagePath = `${organizationId}/${proposal.id}/${Date.now()}_${file.name}`;
+      const storagePath = `${organizationId}/${proposal.id}/${Date.now()}_${sanitizeFilename(file.name)}`;
       const { error: uploadError } = await supabase.storage.from('documents').upload(storagePath, file);
       if (uploadError) throw uploadError;
 
