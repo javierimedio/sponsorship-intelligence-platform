@@ -1,7 +1,4 @@
 // src/components/app-shell.tsx
-// Cabecera reutilizable en todas las páginas autenticadas. Es un Server Component
-// (async): lee la sesión directamente, en vez de que cada página tenga que pasársela.
-
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { SignOutButton } from '@/app/sign-out-button';
