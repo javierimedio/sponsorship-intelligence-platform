@@ -16,9 +16,6 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <img
             src="https://paqtohmxagfebeyyurlq.supabase.co/storage/v1/object/public/assets/GORFACTORY_LOGO_BLANCO.png"
             alt="GOR Factory"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
           />
           <span className="brand-sep">|</span>
           <img
