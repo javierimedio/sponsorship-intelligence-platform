@@ -24,4 +24,33 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <img
             src="https://static.gorfactory.es/images/header/logo_Roly_2025.svg"
             alt="Roly"
-            style={{ filter:
+            style={{ filter: 'brightness(0) invert(1)', opacity: 0.6 }}
+          />
+          <img
+            src="https://static.gorfactory.es/images/home/Logo_WRK_color.svg"
+            alt="Roly WRK"
+            style={{ filter: 'brightness(0) invert(1)', opacity: 0.6 }}
+          />
+          <img
+            src="https://static.gorfactory.es/images/header/logo-stm-small.svg"
+            alt="Stamina"
+            style={{ filter: 'brightness(0) invert(1)', opacity: 0.6 }}
+          />
+        </div>
+
+        <nav className="topbar-nav">
+          <Link href="/">Inicio</Link>
+          <Link href="/proposals">Propuestas</Link>
+          <Link href="/intake">Nueva propuesta</Link>
+        </nav>
+
+        <div className="topbar-right">
+          {user && <span>{user.email}</span>}
+          <SignOutButton />
+        </div>
+      </div>
+
+      <div className="main">{children}</div>
+    </>
+  );
+}
