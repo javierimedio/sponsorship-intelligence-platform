@@ -14,5 +14,9 @@ export function SignOutButton() {
     router.refresh();
   }
 
-  return <button onClick={handleSignOut}>Cerrar sesión</button>;
+  return (
+    <button onClick={handleSignOut} className="btn btn-topbar">
+      Cerrar sesión
+    </button>
+  );
 }

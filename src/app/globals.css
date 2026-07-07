@@ -1,0 +1,264 @@
+/* src/app/globals.css
+   Sistema de diseño de toda la aplicación (fuera de /login, que tiene su propia pantalla
+   completa). Mismas variables de color que login.css para que todo se vea como un solo
+   producto, no como piezas sueltas. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --c-dark: #2C2C2A;
+  --c-mid: #888780;
+  --c-light: #F1EFE8;
+  --c-line: #E0DED6;
+  --c-white: #FFFFFF;
+  --c-amber: #BA7517;
+  --c-amber-l: #FAEEDA;
+  --c-blue: #003087;
+  --c-blue-l: #E5EAF3;
+  --c-green: #3B6D11;
+  --c-green-l: #EAF3DE;
+  --c-red: #C0392B;
+  --c-red-l: #FDECEA;
+  --radius: 6px;
+  --shadow: 0 1px 4px rgba(0, 0, 0, .08), 0 4px 16px rgba(0, 0, 0, .06);
+}
+
+* {
+  box-sizing: border-box;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: var(--c-light);
+  color: var(--c-dark);
+  font-size: 14px;
+}
+
+a {
+  color: var(--c-blue);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3 {
+  font-family: inherit;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  background: var(--c-dark);
+  color: white;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.topbar-brand img {
+  height: 22px;
+  object-fit: contain;
+}
+.topbar-brand .brand-sep {
+  color: rgba(255, 255, 255, .3);
+  font-weight: 300;
+}
+.topbar-nav {
+  display: flex;
+  gap: 4px;
+}
+.topbar-nav a {
+  color: rgba(255, 255, 255, .78);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+}
+.topbar-nav a:hover {
+  background: rgba(255, 255, 255, .12);
+  color: white;
+  text-decoration: none;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .78);
+}
+
+/* ── LAYOUT ── */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* ── CARD ── */
+.card {
+  background: var(--c-white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--c-mid);
+  margin-bottom: 1rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--c-line);
+}
+
+/* ── BOTONES ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: .55rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--c-dark);
+  color: white;
+  transition: opacity .15s, background .15s;
+}
+.btn:hover {
+  opacity: .9;
+  text-decoration: none;
+}
+.btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+.btn-outline {
+  background: transparent;
+  border-color: var(--c-line);
+  color: var(--c-dark);
+}
+.btn-outline:hover {
+  background: var(--c-light);
+}
+.btn-amber {
+  background: var(--c-amber);
+  color: white;
+}
+.btn-topbar {
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .25);
+  color: white;
+}
+.btn-topbar:hover {
+  background: rgba(255, 255, 255, .2);
+}
+
+/* ── FORMULARIOS ── */
+input[type=text], input[type=email], input[type=password], input[type=number],
+select, textarea {
+  font-family: inherit;
+  font-size: 13px;
+  padding: .5rem .7rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  color: var(--c-dark);
+  background: white;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--c-amber);
+}
+label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--c-mid);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ── TABLAS ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th {
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--c-light);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--c-mid);
+  border-bottom: 1px solid var(--c-line);
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--c-line);
+  vertical-align: middle;
+}
+tr:last-child td {
+  border-bottom: none;
+}
+tr:hover td {
+  background: #FAFAF8;
+}
+
+/* ── ESTADOS ── */
+.status {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.s-received   { background: var(--c-light);   color: var(--c-mid); }
+.s-extracting { background: var(--c-amber-l); color: var(--c-amber); }
+.s-extracted  { background: var(--c-blue-l);  color: var(--c-blue); }
+.s-evaluated  { background: var(--c-green-l); color: var(--c-green); }
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--c-mid);
+}
+
+.stat-block {
+  display: flex;
+  gap: 32px;
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  color: var(--c-mid);
+  text-transform: uppercase;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 2px;
+}

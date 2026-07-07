@@ -322,7 +322,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             />
           </div>
 
-          <button type="submit" disabled={loading} style={{ padding: '8px 16px', width: 'fit-content' }}>
+          <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
             {loading ? PHASE_LABEL[phase] : manualMode ? 'Crear propuesta →' : 'Crear, extraer y evaluar'}
           </button>
         </form>
@@ -351,7 +351,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Importe total estimado (€)</label>
             <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} style={{ width: '100%', padding: 6 }} />
           </div>
-          <button type="submit" disabled={loading} style={{ padding: '8px 16px', width: 'fit-content' }}>
+          <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
             {loading ? PHASE_LABEL[phase] : 'Guardar extracción y continuar →'}
           </button>
         </form>
@@ -429,7 +429,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             </div>
           ))}
 
-          <button type="submit" disabled={loading} style={{ marginTop: 16, padding: '8px 16px' }}>
+          <button type="submit" disabled={loading} className="btn btn-amber" style={{ marginTop: 16 }}>
             {loading ? PHASE_LABEL[phase] : 'Calcular evaluación →'}
           </button>
         </form>
