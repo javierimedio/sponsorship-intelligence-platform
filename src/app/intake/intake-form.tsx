@@ -74,6 +74,20 @@ function sanitizeFilename(filename: string): string {
     .replace(/[^a-zA-Z0-9.\-_]/g, '_');
 }
 
+// Si el servidor devuelve una respuesta vacía o no-JSON (función que falla a mitad,
+// timeout, etc.), esto da un mensaje diagnosticable en vez de "Unexpected end of JSON input".
+async function safeJson(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) {
+    throw new Error(`Respuesta vacía del servidor (HTTP ${res.status}). Revisa los logs de Vercel.`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Respuesta no válida del servidor (HTTP ${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
 export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -134,7 +148,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
       });
-      const proposal = await proposalRes.json();
+      const proposal = await safeJson(proposalRes);
       if (!proposalRes.ok) throw new Error(proposal.error ?? 'Error al crear la propuesta.');
       setProposalId(proposal.id);
 
@@ -152,7 +166,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId: proposal.id, storagePath, originalFilename: file.name }),
       });
-      const document = await documentRes.json();
+      const document = await safeJson(documentRes);
       if (!documentRes.ok) throw new Error(document.error ?? 'Error al registrar el documento.');
       setDocumentId(document.id);
 
@@ -169,7 +183,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId: proposal.id, documentId: document.id, storagePath }),
       });
-      const extraction = await extractionRes.json();
+      const extraction = await safeJson(extractionRes);
       if (!extractionRes.ok) throw new Error(extraction.error ?? 'Error en la extracción.');
       setExtractedSummary(
         typeof extraction.extractedJson?.summary === 'string' ? extraction.extractedJson.summary : null,
@@ -181,7 +195,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId: proposal.id }),
       });
-      const evaluation = await evaluationRes.json();
+      const evaluation = await safeJson(evaluationRes);
       if (!evaluationRes.ok) throw new Error(evaluation.error ?? 'Error en la evaluación.');
 
       setResult(evaluation);
@@ -219,14 +233,14 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId, documentId, extractedJson }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar la extracción manual.');
 
       setExtractedSummary(manualSummary || null);
 
       // Cargar el catálogo de la organización para dibujar el formulario de evaluación
       const catalogRes = await fetch('/api/catalog');
-      const catalogData = await catalogRes.json();
+      const catalogData = await safeJson(catalogRes);
       if (!catalogRes.ok) throw new Error(catalogData.error ?? 'Error al cargar el catálogo.');
       setCatalog(catalogData);
 
@@ -266,7 +280,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId, scores, risks, financials }),
       });
-      const evaluation = await res.json();
+      const evaluation = await safeJson(res);
       if (!res.ok) throw new Error(evaluation.error ?? 'Error al evaluar manualmente.');
 
       setResult(evaluation);

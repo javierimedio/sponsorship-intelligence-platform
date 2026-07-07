@@ -14,7 +14,11 @@ export async function GET() {
   }
 
   const repository = new SupabaseEvaluationCatalogRepository(supabase);
-  const catalog = await repository.getCatalog(profile.organizationId);
 
-  return NextResponse.json(catalog);
+  try {
+    const catalog = await repository.getCatalog(profile.organizationId);
+    return NextResponse.json(catalog);
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
 }
