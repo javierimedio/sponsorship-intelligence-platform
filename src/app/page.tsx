@@ -27,6 +27,9 @@ export default async function HomePage() {
         Sesión iniciada como <strong>{user.email}</strong>
       </p>
       <SignOutButton />
+      <p style={{ marginTop: 24 }}>
+        <Link href="/intake">Ir a Intake &amp; Extraction →</Link>
+      </p>
       <p style={{ marginTop: 24 }}>Organizaciones visibles (respeta la RLS de tu sesión):</p>
       {error ? (
         <pre style={{ color: 'crimson' }}>{error.message}</pre>

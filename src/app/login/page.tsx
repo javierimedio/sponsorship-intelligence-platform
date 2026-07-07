@@ -44,6 +44,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-screen">
+      {/* Logo del grupo arriba, igual patrón que el HTML de referencia */}
       <img
         src="https://paqtohmxagfebeyyurlq.supabase.co/storage/v1/object/public/assets/GORFACTORY_LOGO_BLANCO.png"
         alt="GOR Factory"
@@ -123,6 +124,7 @@ export default function LoginPage() {
         )}
       </div>
 
+      {/* Logos de marca debajo de la card, igual patrón que el HTML de referencia */}
       <div className="auth-brands-bottom">
         <img src="https://static.gorfactory.es/images/header/logo_Roly_2025.svg" alt="Roly" />
         <img src="https://static.gorfactory.es/images/home/Logo_WRK_color.svg" alt="Roly WRK" />

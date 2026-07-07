@@ -32,13 +32,31 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
    supabase/migrations/0004_brands.sql
    supabase/migrations/0005_profiles.sql
    supabase/migrations/0006_auth_hook_custom_claims.sql
+   supabase/migrations/0007_fix_auth_hook_permissions.sql
+   supabase/migrations/0008_fix_reserved_role_claim.sql
+   supabase/migrations/0009_proposals_minimal.sql
+   supabase/migrations/0010_documents_and_storage.sql
+   supabase/migrations/0011_ai_extractions.sql
    ```
 3. En el dashboard de Supabase: **Authentication → Hooks → Custom Access Token Hook** → apuntar a `public.custom_access_token_hook` (no se puede activar por SQL).
 4. (Opcional, solo en el proyecto de desarrollo) cargar `supabase/migrations/seed_dev_tenancy.sql` — son datos ficticios, nunca reales.
-5. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo.
-6. `npm install`
-7. `npm run dev`
+5. Crea manualmente un usuario en **Authentication → Users** y vincúlalo a un perfil:
+   ```sql
+   insert into profiles (id, tenant_id, organization_id, full_name, role)
+   select u.id, '00000000-0000-0000-0000-000000000001',
+          '00000000-0000-0000-0000-000000000011', 'Tu nombre', 'org_admin'
+   from auth.users u where u.email = 'tu@email.com';
+   ```
+6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo.
+7. `npm install`
+8. `npm run dev`
+
+## Lecciones de la puesta en marcha (para no repetirlas)
+
+- El claim del JWT para el rol de negocio **nunca** debe llamarse `role` — es un nombre reservado que usa PostgREST para decidir con qué rol de PostgreSQL ejecutar cada request. Lo llamamos `app_role`.
+- El Auth Hook necesita `security definer` + `grant select` explícito a `supabase_auth_admin` sobre `profiles`, porque si no, la RLS de esa tabla bloquea al propio hook y el login devuelve 500.
+- Activar el Auth Hook en el dashboard es un paso manual — no se puede hacer por SQL.
 
 ## Siguiente paso de desarrollo
 
-Con esta capa levantada y probada (crear una organización, un usuario, comprobar que el JWT lleva `tenant_id`/`organization_id`/`role` y que la RLS bloquea cruces entre organizaciones), el siguiente módulo es **Intake & Extraction**: tablas `documents` + `ai_extractions` + Agente 1, siguiendo el mismo patrón de esta capa (migración → dominio → caso de uso → adapter Supabase).
+Con Tenant/Auth/RLS e Intake & Extraction levantados (crear una propuesta desde `/intake`, subir un documento, verlo registrado en `documents`), el siguiente módulo es conectar el **Agente 1 (extracción)**: al confirmarse la subida, una función procesa el documento y rellena `ai_extractions` con el contenido normalizado, siguiendo el mismo patrón (migración → dominio → caso de uso → adapter) que ya está establecido.
