@@ -63,7 +63,7 @@ export class SupabaseEvaluationResultRepository implements EvaluationResultRepos
     private readonly organizationId: string,
   ) {}
 
-  async saveOutcome(proposalId: ProposalId, outcome: EvaluationOutcome): Promise<void> {
+  async saveOutcome(proposalId: ProposalId, outcome: EvaluationOutcome, source: 'ai' | 'manual'): Promise<void> {
     const base = { tenant_id: this.tenantId, organization_id: this.organizationId, proposal_id: proposalId };
 
     if (outcome.scores.length) {
@@ -73,6 +73,7 @@ export class SupabaseEvaluationResultRepository implements EvaluationResultRepos
           scoring_attribute_id: s.attributeId,
           score_value: s.scoreValue,
           ai_rationale: s.rationale,
+          source,
         })),
       );
       if (error) throw error;
@@ -86,6 +87,7 @@ export class SupabaseEvaluationResultRepository implements EvaluationResultRepos
           level: r.level,
           impact: r.impact,
           computed_score: r.computedScore,
+          source,
         })),
       );
       if (error) throw error;
@@ -97,6 +99,7 @@ export class SupabaseEvaluationResultRepository implements EvaluationResultRepos
           ...base,
           economic_concept_id: f.conceptId,
           estimated_amount: f.estimatedAmount,
+          source,
         })),
       );
       if (error) throw error;

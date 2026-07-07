@@ -6,17 +6,44 @@ import { createSupabaseBrowserClient } from '@/infrastructure/supabase/browser-c
 
 interface IntakeFormProps {
   organizationId: string;
+  manualMode: boolean;
 }
 
-type Step =
-  | 'idle'
+type Phase =
+  | 'input'
   | 'creating-proposal'
   | 'uploading'
   | 'registering'
   | 'extracting'
   | 'evaluating'
+  | 'manual-extract'
+  | 'manual-evaluate'
+  | 'saving-manual-extraction'
+  | 'saving-manual-evaluation'
   | 'done'
   | 'error';
+
+interface CatalogAttribute {
+  id: string;
+  blockName: string;
+  name: string;
+  maxScore: number;
+}
+interface CatalogRiskFactor {
+  id: string;
+  blockName: string;
+  name: string;
+}
+interface CatalogConcept {
+  id: string;
+  name: string;
+  nature: 'cost' | 'result';
+}
+interface Catalog {
+  scoringAttributes: CatalogAttribute[];
+  riskFactors: CatalogRiskFactor[];
+  economicConcepts: CatalogConcept[];
+}
 
 interface EvaluationResult {
   totalScore: number;
@@ -27,55 +54,81 @@ interface EvaluationResult {
   financials: { conceptId: string; estimatedAmount: number | null }[];
 }
 
-const STEP_LABEL: Record<Step, string> = {
-  idle: '',
+const PHASE_LABEL: Partial<Record<Phase, string>> = {
   'creating-proposal': 'Creando propuesta...',
   uploading: 'Subiendo documento a Storage...',
   registering: 'Registrando metadatos...',
   extracting: 'Agente 1 leyendo el documento...',
   evaluating: 'Agentes 2/3/5 evaluando (scoring, riesgo, financials)...',
-  done: '',
-  error: '',
+  'saving-manual-extraction': 'Guardando extracción manual...',
+  'saving-manual-evaluation': 'Calculando y guardando evaluación...',
 };
 
+const RISK_OPTIONS = ['Bajo', 'Medio', 'Alto'];
+
 // Supabase Storage no admite espacios ni caracteres acentuados en la ruta del objeto.
-// El nombre "bonito" original se guarda igualmente en `documents.original_filename`
-// para mostrarlo en la UI — esto solo afecta a la ruta física del archivo.
 function sanitizeFilename(filename: string): string {
   return filename
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quita acentos (á→a, ó→o, ñ se trata aparte abajo)
-    .replace(/[^a-zA-Z0-9.\-_]/g, '_'); // cualquier otro carácter (espacios, ñ, etc.) → "_"
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '_');
 }
 
-export function IntakeForm({ organizationId }: IntakeFormProps) {
+export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [step, setStep] = useState<Step>('idle');
+  const [phase, setPhase] = useState<Phase>('input');
   const [message, setMessage] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [extractedSummary, setExtractedSummary] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent) {
+  // Estado que sobrevive entre pasos del modo manual
+  const [proposalId, setProposalId] = useState<string | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+
+  // Formulario de extracción manual
+  const [manualRequesterName, setManualRequesterName] = useState('');
+  const [manualRequesterOrg, setManualRequesterOrg] = useState('');
+  const [manualCollaborationType, setManualCollaborationType] = useState('');
+  const [manualSummary, setManualSummary] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+
+  // Formulario de evaluación manual: valores por id de catálogo
+  const [manualScores, setManualScores] = useState<Record<string, string>>({});
+  const [manualRisks, setManualRisks] = useState<Record<string, { level: string; impact: string }>>({});
+  const [manualFinancials, setManualFinancials] = useState<Record<string, string>>({});
+
+  const loading = [
+    'creating-proposal',
+    'uploading',
+    'registering',
+    'extracting',
+    'evaluating',
+    'saving-manual-extraction',
+    'saving-manual-evaluation',
+  ].includes(phase);
+
+  async function handleInitialSubmit(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     setResult(null);
     setExtractedSummary(null);
 
     if (!title.trim()) {
-      setStep('error');
+      setPhase('error');
       setMessage('El título es obligatorio.');
       return;
     }
     if (!file) {
-      setStep('error');
-      setMessage('Sube un documento — es necesario para que la IA pueda evaluar la propuesta.');
+      setPhase('error');
+      setMessage('Sube un documento — hace falta para la extracción, automática o manual.');
       return;
     }
 
     try {
       // 1. Crear la propuesta
-      setStep('creating-proposal');
+      setPhase('creating-proposal');
       const proposalRes = await fetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,16 +136,17 @@ export function IntakeForm({ organizationId }: IntakeFormProps) {
       });
       const proposal = await proposalRes.json();
       if (!proposalRes.ok) throw new Error(proposal.error ?? 'Error al crear la propuesta.');
+      setProposalId(proposal.id);
 
       // 2. Subir el archivo directamente a Storage
-      setStep('uploading');
+      setPhase('uploading');
       const supabase = createSupabaseBrowserClient();
       const storagePath = `${organizationId}/${proposal.id}/${Date.now()}_${sanitizeFilename(file.name)}`;
       const { error: uploadError } = await supabase.storage.from('documents').upload(storagePath, file);
       if (uploadError) throw uploadError;
 
       // 3. Registrar los metadatos del documento
-      setStep('registering');
+      setPhase('registering');
       const documentRes = await fetch('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,9 +154,16 @@ export function IntakeForm({ organizationId }: IntakeFormProps) {
       });
       const document = await documentRes.json();
       if (!documentRes.ok) throw new Error(document.error ?? 'Error al registrar el documento.');
+      setDocumentId(document.id);
 
-      // 4. Agente 1 — Extracción
-      setStep('extracting');
+      if (manualMode) {
+        // Pasamos al formulario de extracción manual — nada de IA todavía.
+        setPhase('manual-extract');
+        return;
+      }
+
+      // Camino automático: Agente 1 → Agentes 2/3/5, encadenados.
+      setPhase('extracting');
       const extractionRes = await fetch('/api/extractions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,8 +175,7 @@ export function IntakeForm({ organizationId }: IntakeFormProps) {
         typeof extraction.extractedJson?.summary === 'string' ? extraction.extractedJson.summary : null,
       );
 
-      // 5. Agentes 2/3/5 — Evaluación
-      setStep('evaluating');
+      setPhase('evaluating');
       const evaluationRes = await fetch('/api/evaluations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,55 +185,247 @@ export function IntakeForm({ organizationId }: IntakeFormProps) {
       if (!evaluationRes.ok) throw new Error(evaluation.error ?? 'Error en la evaluación.');
 
       setResult(evaluation);
-      setStep('done');
+      setPhase('done');
       setMessage(`Propuesta "${proposal.title}" extraída y evaluada correctamente.`);
       setTitle('');
       setFile(null);
     } catch (error) {
-      setStep('error');
+      setPhase('error');
       setMessage((error as Error).message);
     }
   }
 
-  const loading = ['creating-proposal', 'uploading', 'registering', 'extracting', 'evaluating'].includes(step);
+  async function handleManualExtractionSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!proposalId) return;
+
+    try {
+      setPhase('saving-manual-extraction');
+
+      const extractedJson = {
+        requester_name: manualRequesterName || null,
+        requester_org: manualRequesterOrg || null,
+        collaboration_type: manualCollaborationType || null,
+        summary: manualSummary,
+        assets_offered: [],
+        estimated_total_amount: manualAmount ? Number(manualAmount) : null,
+        currency: 'EUR',
+        opportunities: [],
+        risks: [],
+      };
+
+      const res = await fetch('/api/extractions/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, documentId, extractedJson }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error al guardar la extracción manual.');
+
+      setExtractedSummary(manualSummary || null);
+
+      // Cargar el catálogo de la organización para dibujar el formulario de evaluación
+      const catalogRes = await fetch('/api/catalog');
+      const catalogData = await catalogRes.json();
+      if (!catalogRes.ok) throw new Error(catalogData.error ?? 'Error al cargar el catálogo.');
+      setCatalog(catalogData);
+
+      setPhase('manual-evaluate');
+    } catch (error) {
+      setPhase('error');
+      setMessage((error as Error).message);
+    }
+  }
+
+  async function handleManualEvaluationSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!proposalId || !catalog) return;
+
+    try {
+      setPhase('saving-manual-evaluation');
+
+      const scores = catalog.scoringAttributes.map((a) => ({
+        attributeId: a.id,
+        score: Math.min(Number(manualScores[a.id] ?? 0), a.maxScore),
+        rationale: 'Puntuación introducida manualmente.',
+      }));
+
+      const risks = catalog.riskFactors.map((f) => ({
+        factorId: f.id,
+        level: manualRisks[f.id]?.level ?? 'Bajo',
+        impact: manualRisks[f.id]?.impact ?? 'Bajo',
+      }));
+
+      const financials = catalog.economicConcepts.map((c) => ({
+        conceptId: c.id,
+        estimatedAmount: manualFinancials[c.id] ? Number(manualFinancials[c.id]) : null,
+      }));
+
+      const res = await fetch('/api/evaluations/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, scores, risks, financials }),
+      });
+      const evaluation = await res.json();
+      if (!res.ok) throw new Error(evaluation.error ?? 'Error al evaluar manualmente.');
+
+      setResult(evaluation);
+      setPhase('done');
+      setMessage('Propuesta evaluada manualmente (source="manual").');
+    } catch (error) {
+      setPhase('error');
+      setMessage((error as Error).message);
+    }
+  }
 
   return (
     <div>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-            Título de la propuesta
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="ej: Patrocinio Club Deportivo X — 2026"
-            style={{ width: '100%', padding: 8 }}
-          />
-        </div>
+      {phase === 'input' || loading ? (
+        <form onSubmit={handleInitialSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Título de la propuesta
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="ej: Patrocinio Club Deportivo X — 2026"
+              style={{ width: '100%', padding: 8 }}
+              disabled={loading}
+            />
+          </div>
 
-        <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-            Documento (PDF/imagen) — obligatorio, la IA necesita leerlo
-          </label>
-          <input
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-        </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Documento (PDF/imagen) — {manualMode ? 'para archivo, tú introduces los datos a mano' : 'la IA lo leerá'}
+            </label>
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              disabled={loading}
+            />
+          </div>
 
-        <button type="submit" disabled={loading} style={{ padding: '8px 16px', width: 'fit-content' }}>
-          {loading ? STEP_LABEL[step] : 'Crear, extraer y evaluar'}
-        </button>
+          <button type="submit" disabled={loading} style={{ padding: '8px 16px', width: 'fit-content' }}>
+            {loading ? PHASE_LABEL[phase] : manualMode ? 'Crear propuesta →' : 'Crear, extraer y evaluar'}
+          </button>
+        </form>
+      ) : null}
 
-        {message && <p style={{ color: step === 'error' ? 'crimson' : 'green', fontSize: 13 }}>{message}</p>}
-      </form>
+      {phase === 'manual-extract' && (
+        <form onSubmit={handleManualExtractionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20, padding: 16, border: '1px solid #ddd', borderRadius: 4 }}>
+          <h2 style={{ fontSize: 15 }}>Extracción manual (equivalente al Agente 1)</h2>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Solicitante (persona)</label>
+            <input type="text" value={manualRequesterName} onChange={(e) => setManualRequesterName(e.target.value)} style={{ width: '100%', padding: 6 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Organización solicitante</label>
+            <input type="text" value={manualRequesterOrg} onChange={(e) => setManualRequesterOrg(e.target.value)} style={{ width: '100%', padding: 6 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Tipo de colaboración</label>
+            <input type="text" value={manualCollaborationType} onChange={(e) => setManualCollaborationType(e.target.value)} placeholder="ej: Patrocinio deportivo" style={{ width: '100%', padding: 6 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Resumen</label>
+            <textarea value={manualSummary} onChange={(e) => setManualSummary(e.target.value)} rows={3} style={{ width: '100%', padding: 6 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Importe total estimado (€)</label>
+            <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} style={{ width: '100%', padding: 6 }} />
+          </div>
+          <button type="submit" disabled={loading} style={{ padding: '8px 16px', width: 'fit-content' }}>
+            {loading ? PHASE_LABEL[phase] : 'Guardar extracción y continuar →'}
+          </button>
+        </form>
+      )}
+
+      {phase === 'manual-evaluate' && catalog && (
+        <form onSubmit={handleManualEvaluationSubmit} style={{ marginTop: 20, padding: 16, border: '1px solid #ddd', borderRadius: 4 }}>
+          <h2 style={{ fontSize: 15, marginBottom: 12 }}>Evaluación manual (equivalente a los Agentes 2/3/5)</h2>
+
+          <h3 style={{ fontSize: 13, marginTop: 16 }}>Scoring por atributo</h3>
+          {catalog.scoringAttributes.map((a) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <label style={{ fontSize: 12, flex: 1 }}>
+                {a.blockName} — {a.name} (máx. {a.maxScore})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={a.maxScore}
+                value={manualScores[a.id] ?? ''}
+                onChange={(e) => setManualScores((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                style={{ width: 90, padding: 4 }}
+              />
+            </div>
+          ))}
+
+          <h3 style={{ fontSize: 13, marginTop: 16 }}>Factores de riesgo</h3>
+          {catalog.riskFactors.map((f) => (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <label style={{ fontSize: 12, flex: 1 }}>
+                {f.blockName} — {f.name}
+              </label>
+              <select
+                value={manualRisks[f.id]?.level ?? 'Bajo'}
+                onChange={(e) =>
+                  setManualRisks((prev) => ({ ...prev, [f.id]: { ...prev[f.id], level: e.target.value, impact: prev[f.id]?.impact ?? 'Bajo' } }))
+                }
+                style={{ padding: 4 }}
+              >
+                {RISK_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    Nivel: {opt}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={manualRisks[f.id]?.impact ?? 'Bajo'}
+                onChange={(e) =>
+                  setManualRisks((prev) => ({ ...prev, [f.id]: { level: prev[f.id]?.level ?? 'Bajo', impact: e.target.value } }))
+                }
+                style={{ padding: 4 }}
+              >
+                {RISK_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    Impacto: {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+
+          <h3 style={{ fontSize: 13, marginTop: 16 }}>Conceptos económicos (€)</h3>
+          {catalog.economicConcepts.map((c) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <label style={{ fontSize: 12, flex: 1 }}>
+                {c.name} ({c.nature === 'cost' ? 'coste' : 'resultado'})
+              </label>
+              <input
+                type="number"
+                value={manualFinancials[c.id] ?? ''}
+                onChange={(e) => setManualFinancials((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                style={{ width: 120, padding: 4 }}
+              />
+            </div>
+          ))}
+
+          <button type="submit" disabled={loading} style={{ marginTop: 16, padding: '8px 16px' }}>
+            {loading ? PHASE_LABEL[phase] : 'Calcular evaluación →'}
+          </button>
+        </form>
+      )}
+
+      {message && <p style={{ color: phase === 'error' ? 'crimson' : 'green', fontSize: 13, marginTop: 12 }}>{message}</p>}
 
       {extractedSummary && (
         <div style={{ marginTop: 20, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-          <strong style={{ fontSize: 12 }}>Resumen extraído por el Agente 1:</strong>
+          <strong style={{ fontSize: 12 }}>Resumen extraído:</strong>
           <p style={{ fontSize: 13, marginTop: 4 }}>{extractedSummary}</p>
         </div>
       )}

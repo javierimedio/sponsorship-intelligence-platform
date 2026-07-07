@@ -10,6 +10,14 @@ import { OpenAiProvider } from './openai-provider';
 export function getAIProvider(): AIProvider {
   const provider = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase();
 
+  if (provider === 'manual') {
+    throw new Error(
+      "AI_PROVIDER='manual' no debe llegar a instanciar un proveedor de IA — el modo manual " +
+        'se gestiona en la UI (/intake) llamando a /api/extractions/manual y /api/evaluations/manual, ' +
+        'nunca a estos endpoints automáticos.',
+    );
+  }
+
   if (provider === 'anthropic') {
     return new AnthropicProvider();
   }

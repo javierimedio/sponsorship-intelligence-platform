@@ -8,5 +8,5 @@ export interface EvaluationCatalogRepository {
 }
 
 export interface EvaluationResultRepository {
-  saveOutcome(proposalId: ProposalId, outcome: EvaluationOutcome): Promise<void>;
+  saveOutcome(proposalId: ProposalId, outcome: EvaluationOutcome, source: 'ai' | 'manual'): Promise<void>;
 }

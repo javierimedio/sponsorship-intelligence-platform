@@ -51,7 +51,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
           '00000000-0000-0000-0000-000000000011', 'Tu nombre', 'org_admin'
    from auth.users u where u.email = 'tu@email.com';
    ```
-6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo **y una clave de OpenAI real** (`OPENAI_API_KEY`, en [platform.openai.com](https://platform.openai.com) — es un producto de pago por uso, distinto de tu suscripción de ChatGPT, aunque suele incluir algo de crédito de prueba gratuito para cuentas nuevas). `AI_PROVIDER=openai` es el valor por defecto tras descubrir que la capa gratuita de Gemini no está disponible en España/UE. Para cambiar de proveedor, solo hay que cambiar esta variable — ningún código cambia.
+6. Copiar `.env.example` a `.env.local`. Con `AI_PROVIDER=manual` (valor por defecto) no necesitas ninguna clave de IA — en `/intake` tú mismo rellenas los datos que rellenaría un Agente, y el motor de scoring/riesgo/recomendación es idéntico. Para activar IA real más adelante, cambia `AI_PROVIDER` a `openai`/`anthropic`/`gemini` y rellena la clave correspondiente — ningún código cambia.
 7. `npm install`
 8. `npm run dev`
 
@@ -72,7 +72,8 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
 - No hay `scoring_model_versions` ni Rule Engine configurable todavía — los pesos/catálogos son fijos por organización, editables directamente en las tablas.
 - La recomendación final es una función con umbral fijo en código (`computeRecommendation`), no una tabla `recommendation_rules` configurable.
 - No hay Global Confidence Score, `human_feedback`, ni Knowledge Engine — quedan para cuando haya histórico real que aprovechar.
-- El proveedor de IA por defecto es **OpenAI** — tras comprobar que la capa gratuita de Gemini no está disponible en España/UE (devuelve `limit: 0` en vez de agotarse tras uso real). El puerto `AIProvider` es idéntico para los tres (Claude/Gemini/OpenAI); cambiar de uno a otro es la variable de entorno `AI_PROVIDER`, nunca código. Limitación conocida del adapter de OpenAI: no acepta PDF directamente por la API de Chat Completions — solo imágenes (PNG/JPG) — para PDF hay que usar Claude o Gemini (con facturación activada) hasta que se conecte la Files API de OpenAI.
+- El proveedor de IA por defecto es **`manual`** — tras comprobar que Gemini (bloqueado por región en España/UE) y OpenAI (cuenta de API nueva sin saldo) no funcionaban sin activar facturación en algún sitio, se construyó un tercer camino que no depende de ningún proveedor: en `/intake`, cuando `AI_PROVIDER=manual`, el usuario rellena directamente los mismos datos que rellenaría un Agente (extracción, scoring, riesgo, financials) en formularios, y `buildEvaluationOutcome()` calcula el resultado exactamente igual que con IA — la única diferencia registrada es `source='manual'` en `proposal_scores`/`proposal_risks`/`proposal_financials`. Esto permite validar TODO el resto de la plataforma (RLS, Storage, catálogo, matriz de riesgo, recomendación) sin depender de que nadie apruebe un gasto. El puerto `AIProvider` es idéntico para Claude/Gemini/OpenAI; cambiar entre ellos (o al modo manual) es solo la variable de entorno `AI_PROVIDER`.
+- Limitación conocida del adapter de OpenAI: no acepta PDF directamente por la API de Chat Completions — solo imágenes (PNG/JPG) — para PDF con OpenAI haría falta conectar su Files API (pendiente).
 
 ## Siguiente paso de desarrollo
 
