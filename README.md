@@ -51,7 +51,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
           '00000000-0000-0000-0000-000000000011', 'Tu nombre', 'org_admin'
    from auth.users u where u.email = 'tu@email.com';
    ```
-6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo **y una clave de Gemini real** (`GEMINI_API_KEY`, gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey)) — sin ella, el Agente 1 y los Agentes 2/3/5 fallarán. `AI_PROVIDER=gemini` es el valor por defecto; para volver a Claude, cambia esa variable a `anthropic` y rellena `ANTHROPIC_API_KEY` en su lugar — ningún código cambia.
+6. Copiar `.env.example` a `.env.local` y rellenar con las credenciales del proyecto de desarrollo **y una clave de OpenAI real** (`OPENAI_API_KEY`, en [platform.openai.com](https://platform.openai.com) — es un producto de pago por uso, distinto de tu suscripción de ChatGPT, aunque suele incluir algo de crédito de prueba gratuito para cuentas nuevas). `AI_PROVIDER=openai` es el valor por defecto tras descubrir que la capa gratuita de Gemini no está disponible en España/UE. Para cambiar de proveedor, solo hay que cambiar esta variable — ningún código cambia.
 7. `npm install`
 8. `npm run dev`
 
@@ -72,7 +72,7 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
 - No hay `scoring_model_versions` ni Rule Engine configurable todavía — los pesos/catálogos son fijos por organización, editables directamente en las tablas.
 - La recomendación final es una función con umbral fijo en código (`computeRecommendation`), no una tabla `recommendation_rules` configurable.
 - No hay Global Confidence Score, `human_feedback`, ni Knowledge Engine — quedan para cuando haya histórico real que aprovechar.
-- El proveedor de IA por defecto es **Gemini** (capa gratuita), no Claude — decisión de presupuesto, no de arquitectura. El puerto `AIProvider` es idéntico para ambos; cambiar de uno a otro es la variable de entorno `AI_PROVIDER`, nunca código. Los nombres de modelo de Gemini cambian con cierta frecuencia — si `gemini-2.0-flash` deja de estar en la capa gratuita, actualiza la constante `MODEL` en `gemini-provider.ts` consultando https://ai.google.dev/gemini-api/docs/models.
+- El proveedor de IA por defecto es **OpenAI** — tras comprobar que la capa gratuita de Gemini no está disponible en España/UE (devuelve `limit: 0` en vez de agotarse tras uso real). El puerto `AIProvider` es idéntico para los tres (Claude/Gemini/OpenAI); cambiar de uno a otro es la variable de entorno `AI_PROVIDER`, nunca código. Limitación conocida del adapter de OpenAI: no acepta PDF directamente por la API de Chat Completions — solo imágenes (PNG/JPG) — para PDF hay que usar Claude o Gemini (con facturación activada) hasta que se conecte la Files API de OpenAI.
 
 ## Siguiente paso de desarrollo
 

@@ -16,7 +16,8 @@
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.43.0",
     "@anthropic-ai/sdk": "^0.32.0",
-    "@google/generative-ai": "^0.21.0"
+    "@google/generative-ai": "^0.21.0",
+    "openai": "^4.68.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
