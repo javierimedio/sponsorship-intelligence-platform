@@ -5,6 +5,10 @@
 import Link from 'next/link';
 import { AppShell } from '@/components/app-shell';
 import { ScoreBadge, RiskBadge, StatusPill } from '@/components/badges';
+import { KPICard } from '@/components/metric-card';
+import { EmptyState } from '@/components/empty-state';
+import { InsightCard } from '@/components/insight-card';
+import { DecisionCard } from '@/components/decision-card';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { getWorkspaceStage, WorkspaceStage } from '@/lib/workspace-stage';
@@ -47,7 +51,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const [{ data: proposals }, { data: risks }, { data: financials }] = await Promise.all([
+  const [{ data: proposals }, { data: risks }, { data: financials }, { data: activationsInProgress }] = await Promise.all([
     supabase
       .from('proposals')
       .select('id, title, total_score, overall_risk_level, recommendation, submitted_at, approved_at, finalized_at, brand_id, brands(name)')
@@ -62,6 +66,12 @@ export default async function DashboardPage() {
       .from('proposal_financials')
       .select('estimated_amount, economic_concepts(nature), proposals!inner(brand_id, organization_id, brands(name))')
       .eq('proposals.organization_id', profile.organizationId),
+    supabase
+      .from('proposal_activations')
+      .select('id, status, proposals!inner(organization_id, finalized_at)')
+      .in('status', ['pending', 'in_progress'])
+      .eq('proposals.organization_id', profile.organizationId)
+      .is('proposals.finalized_at', null),
   ]);
 
   const rows = (proposals ?? []) as unknown as ProposalRow[];
@@ -83,15 +93,28 @@ export default async function DashboardPage() {
 
   // Pregunta 5: ¿Dónde estoy gastando el presupuesto? — costes agrupados por marca
   const budgetByBrand = new Map<string, number>();
+  let totalCostAll = 0;
+  let totalResultAll = 0;
   for (const f of (financials ?? []) as any[]) {
-    if (f.economic_concepts?.nature !== 'cost' || f.estimated_amount === null) continue;
-    const brandName = f.proposals?.brands?.name ?? 'Corporativo';
-    budgetByBrand.set(brandName, (budgetByBrand.get(brandName) ?? 0) + Number(f.estimated_amount));
+    if (f.estimated_amount === null) continue;
+    if (f.economic_concepts?.nature === 'cost') {
+      totalCostAll += Number(f.estimated_amount);
+      const brandName = f.proposals?.brands?.name ?? 'Corporativo';
+      budgetByBrand.set(brandName, (budgetByBrand.get(brandName) ?? 0) + Number(f.estimated_amount));
+    } else if (f.economic_concepts?.nature === 'result') {
+      totalResultAll += Number(f.estimated_amount);
+    }
   }
-  const totalBudget = [...budgetByBrand.values()].reduce((a, b) => a + b, 0);
+  const totalBudget = totalCostAll;
+  const roiForecast = totalCostAll > 0 ? totalResultAll / totalCostAll : null;
 
   // Pregunta 6: ¿Qué riesgos tengo abiertos? — factores Alto en propuestas no finalizadas
   const openHighRisks = risks?.length ?? 0;
+
+  // Score medio y nº de aprobadas — para las KPI cards
+  const scored = rows.filter((p) => p.total_score !== null);
+  const avgScore = scored.length ? scored.reduce((sum, p) => sum + (p.total_score ?? 0), 0) / scored.length : null;
+  const approvedCount = rows.filter((p) => p.approved_at).length;
 
   // Pipeline: cuenta por etapa del Workspace adaptativo
   const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, approved: 0, finalized: 0 };
@@ -106,26 +129,45 @@ export default async function DashboardPage() {
         Sesión iniciada como <strong>{user.email}</strong>
       </p>
 
-      {/* Preguntas 1, 5, 6 — cifras clave, sin clics */}
+      {/* Executive Summary — redactado, no un chat. Determinista por ahora (usa los mismos
+          datos ya calculados); la redacción por IA real es una fase posterior. */}
+      <InsightCard title="Resumen ejecutivo">
+        Hay <strong>{active.length} propuestas abiertas</strong>
+        {awaitingApproval.length > 0 && (
+          <>
+            , de las cuales <strong>{awaitingApproval.length} esperan tu decisión</strong>
+          </>
+        )}
+        {priority[0] && (
+          <>
+            . La más prioritaria es <strong>&quot;{priority[0].title}&quot;</strong>
+            {priority[0].total_score !== null && ` (score ${Math.round(priority[0].total_score * 100)}%)`}
+          </>
+        )}
+        {openHighRisks > 0 && (
+          <>
+            . Hay <strong>{openHighRisks} riesgo(s) alto(s)</strong> abiertos sin mitigar
+          </>
+        )}
+        {totalBudget > 0 && (
+          <>
+            . El presupuesto comprometido asciende a <strong>{totalBudget.toLocaleString('es-ES')} €</strong>
+            {roiForecast !== null && ` con un ROI previsto de ${roiForecast.toFixed(1)}x`}
+          </>
+        )}
+        .
+      </InsightCard>
+
+      {/* Preguntas 1, 2, 5, 6 — cifras clave, sin clics */}
       <div className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-value">{active.length}</div>
-          <div className="kpi-label">Propuestas abiertas</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value">{awaitingApproval.length}</div>
-          <div className="kpi-label">Esperando tu decisión</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value" style={{ color: openHighRisks > 0 ? 'var(--c-red)' : 'var(--c-dark)' }}>
-            {openHighRisks}
-          </div>
-          <div className="kpi-label">Riesgos altos abiertos</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-value">{totalBudget.toLocaleString('es-ES')} €</div>
-          <div className="kpi-label">Presupuesto comprometido</div>
-        </div>
+        <KPICard label="Propuestas abiertas" value={active.length} />
+        <KPICard label="Esperando decisión" value={awaitingApproval.length} tone={awaitingApproval.length ? 'warning' : 'neutral'} />
+        <KPICard label="Aprobadas" value={approvedCount} tone="positive" />
+        <KPICard label="Score medio" value={avgScore !== null ? `${Math.round(avgScore * 100)}%` : '—'} />
+        <KPICard label="Riesgos altos abiertos" value={openHighRisks} tone={openHighRisks > 0 ? 'negative' : 'neutral'} />
+        <KPICard label="Presupuesto comprometido" value={`${totalBudget.toLocaleString('es-ES')} €`} />
+        <KPICard label="ROI previsto" value={roiForecast !== null ? `${roiForecast.toFixed(1)}x` : '—'} tone="positive" />
+        <KPICard label="Activaciones en curso" value={activationsInProgress?.length ?? 0} />
       </div>
 
       {/* Pipeline — vista general del embudo */}
@@ -156,7 +198,7 @@ export default async function DashboardPage() {
         <div className="card" style={{ flex: 1 }}>
           <div className="card-title">Esperando tu decisión ({awaitingApproval.length})</div>
           {!awaitingApproval.length ? (
-            <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Nada pendiente de aprobación.</p>
+            <EmptyState message="Nada pendiente de aprobación." />
           ) : (
             <ul className="mini-list">
               {awaitingApproval.map((p) => (
@@ -171,23 +213,26 @@ export default async function DashboardPage() {
             </ul>
           )}
         </div>
+      </div>
 
-        {/* Pregunta 2: ¿Cuáles son prioritarias? */}
-        <div className="card" style={{ flex: 1 }}>
-          <div className="card-title">Prioritarias</div>
-          {!priority.length ? (
-            <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Aún no hay propuestas evaluadas.</p>
-          ) : (
-            <ul className="mini-list">
-              {priority.map((p) => (
-                <li key={p.id}>
-                  <Link href={`/proposals/${p.id}`}>{p.title}</Link>
-                  <ScoreBadge totalScore={p.total_score} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {/* Pregunta 2: ¿Cuáles son prioritarias? — tarjetas visuales, no lista */}
+      <div className="card">
+        <div className="card-title">Prioritarias</div>
+        {!priority.length ? (
+          <EmptyState message="Aún no hay propuestas evaluadas." />
+        ) : (
+          priority.map((p) => (
+            <DecisionCard
+              key={p.id}
+              proposalId={p.id}
+              title={p.title}
+              brandName={p.brands?.name ?? 'Corporativo'}
+              totalScore={p.total_score}
+              overallRiskLevel={p.overall_risk_level}
+              recommendation={p.recommendation}
+            />
+          ))
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
@@ -195,7 +240,7 @@ export default async function DashboardPage() {
         <div className="card" style={{ flex: 1 }}>
           <div className="card-title">En ejecución ({inExecution.length})</div>
           {!inExecution.length ? (
-            <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Ninguna colaboración aprobada todavía.</p>
+            <EmptyState message="Ninguna colaboración aprobada todavía." />
           ) : (
             <ul className="mini-list">
               {inExecution.map((p) => (
@@ -212,7 +257,7 @@ export default async function DashboardPage() {
         <div className="card" style={{ flex: 1 }}>
           <div className="card-title">Presupuesto por marca</div>
           {!budgetByBrand.size ? (
-            <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Sin datos financieros todavía.</p>
+            <EmptyState message="Sin datos financieros todavía." />
           ) : (
             <ul className="mini-list">
               {[...budgetByBrand.entries()].map(([brand, amount]) => (

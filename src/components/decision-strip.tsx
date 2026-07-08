@@ -60,7 +60,7 @@ export function DecisionStrip(props: DecisionStripProps) {
 
   return (
     <div
-      className="decision-strip"
+      className={`decision-strip decision-strip-sticky`}
       style={{
         display: 'flex',
         alignItems: 'center',

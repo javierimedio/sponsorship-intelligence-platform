@@ -405,3 +405,12 @@ details.level-2 .level-2-body {
   font-size: 12px;
   color: var(--c-mid);
 }
+
+/* Decision Strip fijo durante el scroll del Workspace (petición explícita: "debe
+   permanecer visible durante todo el scroll"). 56px = altura de la topbar. */
+.decision-strip-sticky {
+  position: sticky;
+  top: 56px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
