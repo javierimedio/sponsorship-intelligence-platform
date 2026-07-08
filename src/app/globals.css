@@ -536,3 +536,22 @@ details.level-2 .level-2-body {
 .pipeline-card-quick-actions button:hover {
   background: var(--c-light);
 }
+
+/* Modal genérico (usado por RejectDialog y futuros diálogos) */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.dialog-box {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+}
