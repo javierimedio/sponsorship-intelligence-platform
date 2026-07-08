@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tone, WorkspaceStage } from '@/lib/workspace-stage';
+import { RejectDialog } from './reject-dialog';
 
 interface DecisionStripProps {
   proposalId: string;
@@ -38,29 +39,38 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const { bg, fg } = TONE_STYLE[tone];
 
-  async function run(action: 'approve' | 'reject' | 'request-review', label: string) {
+  async function run(action: 'approve' | 'request-review', label: string) {
     setLoading(label);
     setError(null);
     try {
-      let body: string | undefined;
-      if (action === 'reject') {
-        const reason = window.prompt('Motivo del rechazo (opcional, ayuda a analizar el pipeline más adelante):');
-        if (reason === null) {
-          setLoading(null);
-          return; // canceló el prompt
-        }
-        body = JSON.stringify({ reason });
-      }
-      const res = await fetch(`/api/proposals/${proposalId}/${action}`, {
-        method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
-      });
+      const res = await fetch(`/api/proposals/${proposalId}/${action}`, { method: 'POST' });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(data.error ?? 'Error al actualizar la propuesta.');
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function confirmReject(reason: string) {
+    setLoading('reject');
+    setError(null);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.error ?? 'Error al rechazar la propuesta.');
+      setRejectDialogOpen(false);
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -101,12 +111,12 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
                 {loading === 'review' ? '...' : 'Solicitar revisión'}
               </button>
               <button
-                onClick={() => run('reject', 'reject')}
+                onClick={() => setRejectDialogOpen(true)}
                 disabled={loading !== null}
                 className="btn btn-outline"
                 style={{ padding: '.4rem .8rem', fontSize: 12, color: 'var(--c-red)', borderColor: 'var(--c-red)' }}
               >
-                {loading === 'reject' ? '...' : 'Rechazar'}
+                Rechazar
               </button>
               <button
                 onClick={() => run('approve', 'approve')}
@@ -121,6 +131,13 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
         </div>
       </div>
       {error && <p style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{error}</p>}
+
+      <RejectDialog
+        open={rejectDialogOpen}
+        onCancel={() => setRejectDialogOpen(false)}
+        onConfirm={confirmReject}
+        loading={loading === 'reject'}
+      />
     </div>
   );
 }
