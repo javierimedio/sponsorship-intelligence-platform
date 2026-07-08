@@ -97,7 +97,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     (f) => !extractedJson || extractedJson[f.key] === null || extractedJson[f.key] === undefined || extractedJson[f.key] === '',
   );
 
-  const pendingActivations = (activations ?? []).filter((a) => a.status !== 'done' && a.status !== 'cancelled');
+  const pendingActivations = (activations ?? []).filter((a: any) => a.status !== 'done' && a.status !== 'cancelled');
 
   const totalCost = (financials ?? [])
     .filter((f: any) => f.economic_concepts?.nature === 'cost' && f.estimated_amount !== null)
@@ -255,7 +255,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
                 </div>
               </div>
               <div className="card-title" style={{ marginTop: 8 }}>KPI: objetivo vs. resultado</div>
-              {!activations?.some((a) => a.kpi_target) ? (
+              {!activations?.some((a: any) => a.kpi_target) ? (
                 <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Sin KPIs de activación registrados.</p>
               ) : (
                 <ul className="mini-list">
