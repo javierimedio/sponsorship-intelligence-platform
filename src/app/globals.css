@@ -414,3 +414,42 @@ details.level-2 .level-2-body {
   z-index: 10;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
+
+/* Timeline con iconos, estilo GitHub/Linear: círculo + línea conectora vertical. */
+.timeline {
+  position: relative;
+  padding-left: 8px;
+}
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 18px;
+}
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+.timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--c-line);
+}
+.timeline-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--c-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+.timeline-body {
+  padding-top: 2px;
+}
