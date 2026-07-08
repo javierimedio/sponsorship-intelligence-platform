@@ -44,7 +44,20 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
     setLoading(label);
     setError(null);
     try {
-      const res = await fetch(`/api/proposals/${proposalId}/${action}`, { method: 'POST' });
+      let body: string | undefined;
+      if (action === 'reject') {
+        const reason = window.prompt('Motivo del rechazo (opcional, ayuda a analizar el pipeline más adelante):');
+        if (reason === null) {
+          setLoading(null);
+          return; // canceló el prompt
+        }
+        body = JSON.stringify({ reason });
+      }
+      const res = await fetch(`/api/proposals/${proposalId}/${action}`, {
+        method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body,
+      });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(data.error ?? 'Error al actualizar la propuesta.');
