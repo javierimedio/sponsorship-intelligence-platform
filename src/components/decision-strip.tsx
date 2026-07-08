@@ -31,6 +31,7 @@ const STAGE_LABEL: Record<WorkspaceStage, string> = {
   rejected: 'Rechazada',
   approved: 'Aprobada',
   finalized: 'Finalizada',
+  archived: 'Archivada',
 };
 
 export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRiskLevel, roi, recommendation }: DecisionStripProps) {
