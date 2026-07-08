@@ -279,3 +279,28 @@ tr:hover td {
   font-weight: 700;
   margin-top: 2px;
 }
+.page-container{
+    max-width:1600px;
+    margin:auto;
+    padding:32px;
+}
+
+.cards-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:24px;
+}
+
+.section-title{
+    font-size:28px;
+    font-weight:700;
+    margin-bottom:24px;
+    color:#111827;
+}
+
+.surface{
+    background:white;
+    border-radius:12px;
+    border:1px solid #E5E7EB;
+    box-shadow:0 2px 10px rgba(0,0,0,.04);
+}
