@@ -20,7 +20,7 @@ import { computeGlobalRiskScore, getTone, getWorkspaceStage } from '@/lib/worksp
 import { generateExecutiveSummary, generateStrengthsAndWeaknesses } from '@/lib/executive-summary';
 import { LifecycleActions } from './lifecycle-actions';
 import { ActivationFollowUp } from './activation-followup';
-import { NegotiationAssistant } from '@/components/negotiation-assistant';
+import { NegotiationSimulator } from '@/components/negotiation-simulator';
 
 interface PageProps {
   params: { id: string };
@@ -64,6 +64,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     { data: risks },
     { data: financials },
     { data: activations },
+    { data: riskMatrixRules },
   ] = await Promise.all([
     supabase.from('documents').select('id, original_filename, storage_path, document_type, uploaded_at').eq('proposal_id', params.id),
     supabase
@@ -77,7 +78,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .eq('proposal_id', params.id),
     supabase
       .from('proposal_risks')
-      .select('level, impact, computed_score, source, risk_factors(name, risk_blocks(name))')
+      .select('risk_factor_id, level, impact, computed_score, source, risk_factors(name, risk_blocks(name))')
       .eq('proposal_id', params.id),
     supabase
       .from('proposal_financials')
@@ -92,6 +93,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       )
       .eq('proposal_id', params.id)
       .order('created_at', { ascending: true }),
+    supabase.from('risk_matrix_rules').select('level, impact, score').eq('organization_id', proposal.organization_id),
   ]);
 
   const documentsWithUrls = await Promise.all(
@@ -305,10 +307,13 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       </div>
 
       {proposal.total_score !== null && (
-        <NegotiationAssistant
+        <NegotiationSimulator
           proposalId={proposal.id}
           totalScore={proposal.total_score}
+          overallRiskLevel={proposal.overall_risk_level}
           currentScores={(scores ?? []).map((s: any) => ({ attributeId: s.scoring_attribute_id, scoreValue: Number(s.score_value) }))}
+          risks={(risks ?? []).map((r: any) => ({ factorId: r.risk_factor_id, name: r.risk_factors?.name ?? '', level: r.level, impact: r.impact }))}
+          riskMatrixRules={(riskMatrixRules ?? []).map((r: any) => ({ level: r.level, impact: r.impact, score: r.score }))}
         />
       )}
 
