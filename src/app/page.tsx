@@ -21,6 +21,7 @@ interface ProposalRow {
   recommendation: string | null;
   submitted_at: string | null;
   approved_at: string | null;
+  rejected_at: string | null;
   finalized_at: string | null;
   brand_id: string | null;
   brands: { name: string } | null;
@@ -54,7 +55,7 @@ export default async function DashboardPage() {
   const [{ data: proposals }, { data: risks }, { data: financials }, { data: activationsInProgress }] = await Promise.all([
     supabase
       .from('proposals')
-      .select('id, title, total_score, overall_risk_level, recommendation, submitted_at, approved_at, finalized_at, brand_id, brands(name)')
+      .select('id, title, total_score, overall_risk_level, recommendation, submitted_at, approved_at, rejected_at, finalized_at, brand_id, brands(name)')
       .eq('organization_id', profile.organizationId),
     supabase
       .from('proposal_risks')
@@ -117,7 +118,7 @@ export default async function DashboardPage() {
   const approvedCount = rows.filter((p) => p.approved_at).length;
 
   // Pipeline: cuenta por etapa del Workspace adaptativo
-  const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, approved: 0, finalized: 0 };
+  const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, rejected: 0, approved: 0, finalized: 0 };
   for (const p of rows) {
     pipelineCounts[getWorkspaceStage(p)]++;
   }
@@ -181,6 +182,12 @@ export default async function DashboardPage() {
           <div className="pipeline-stage">
             <div className="pipeline-count">{pipelineCounts.evaluated}</div>
             <div className="pipeline-label">Evaluada</div>
+          </div>
+          <div className="pipeline-stage">
+            <div className="pipeline-count" style={{ color: pipelineCounts.rejected > 0 ? 'var(--c-red)' : undefined }}>
+              {pipelineCounts.rejected}
+            </div>
+            <div className="pipeline-label">Rechazada</div>
           </div>
           <div className="pipeline-stage">
             <div className="pipeline-count">{pipelineCounts.approved}</div>
