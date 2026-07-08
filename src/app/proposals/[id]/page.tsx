@@ -1,10 +1,10 @@
 // src/app/proposals/[id]/page.tsx
-// Proposal Workspace (Fase 2): una única página en scroll vertical, sin pestañas ni
-// acordeones — inspirado en Linear/Notion. Reutiliza el motor de datos existente al
-// 100%; no se ha creado ninguna tabla nueva. Timeline e Historial de cambios se derivan
-// de timestamps y versiones que YA existían (ai_extractions nunca borra intentos
-// anteriores). Comentarios internos queda como placeholder explícito: no hay dónde
-// persistir un comentario libre sin una tabla nueva, y esta fase tiene prohibido crear una.
+// Proposal Workspace — ronda de refinamiento sobre la Fase 2. Página única en scroll
+// vertical. Cambios de esta ronda: Comentarios oculto (sin persistencia real todavía),
+// Adjuntos categorizados por document_type, Timeline con iconos, Executive Summary
+// desacoplado de su función generadora, Decision Strip enriquecido con acciones de
+// ciclo de vida, resúmenes antes de las tablas de Activaciones/Financials/Riesgo,
+// y Fortalezas/Debilidades al final de Evaluación.
 
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
@@ -16,7 +16,8 @@ import { InsightCard } from '@/components/insight-card';
 import { EmptyState } from '@/components/empty-state';
 import { InlineEditable } from '@/components/inline-editable';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
-import { getTone, getWorkspaceStage } from '@/lib/workspace-stage';
+import { computeGlobalRiskScore, getTone, getWorkspaceStage } from '@/lib/workspace-stage';
+import { generateExecutiveSummary, generateStrengthsAndWeaknesses } from '@/lib/executive-summary';
 import { LifecycleActions } from './lifecycle-actions';
 import { ActivationFollowUp } from './activation-followup';
 
@@ -31,42 +32,15 @@ const REQUIRED_EXTRACTION_FIELDS: { key: string; label: string }[] = [
   { key: 'estimated_total_amount', label: 'Importe estimado' },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildExecutiveSummary(proposal: any, scores: any[], risks: any[], pendingActivations: any[]): string[] {
-  if (proposal.total_score === null) {
-    return ['Esta propuesta todavía no ha sido evaluada — no hay nada que interpretar todavía.'];
-  }
-
-  const paragraphs: string[] = [];
-  const pct = Math.round(proposal.total_score * 100);
-  paragraphs.push(
-    `Esta propuesta obtiene un score del ${pct}% y una recomendación de "${proposal.recommendation}", con un riesgo global ${proposal.overall_risk_level ?? 'sin calcular'}.`,
-  );
-
-  const topScores = [...scores].sort((a, b) => Number(b.score_value) - Number(a.score_value)).slice(0, 2);
-  if (topScores.length) {
-    paragraphs.push(
-      `Los principales motivos son: ${topScores
-        .map((s) => `${s.scoring_attributes?.name} (${Number(s.score_value).toFixed(2)}/${s.scoring_attributes?.max_score})`)
-        .join(', ')}.`,
-    );
-  }
-
-  const relevantRisks = risks.filter((r) => r.level === 'Alto' || r.impact === 'Alto');
-  paragraphs.push(
-    relevantRisks.length
-      ? `He detectado ${relevantRisks.length} riesgo(s) relevante(s): ${relevantRisks.map((r) => r.risk_factors?.name).join(', ')}.`
-      : 'No he detectado riesgos de nivel alto en esta propuesta.',
-  );
-
-  if (pendingActivations.length) {
-    const highPriority = pendingActivations.filter((a) => a.priority === 'Alta');
-    const list = (highPriority.length ? highPriority : pendingActivations).slice(0, 2);
-    paragraphs.push(`Las acciones que más incrementarían el ROI serían: ${list.map((a) => a.activation_catalog_items?.name).join(', ')}.`);
-  }
-
-  return paragraphs;
-}
+const DOCUMENT_TYPE_LABEL: Record<string, string> = {
+  original: 'PDF original recibido',
+  email: 'Email asociado',
+  ai_generated: 'Archivos generados por IA',
+  image: 'Imágenes',
+  dossier: 'Dossier',
+  other: 'Otros',
+};
+const DOCUMENT_TYPE_ORDER = ['original', 'dossier', 'email', 'image', 'ai_generated', 'other'];
 
 export default async function ProposalWorkspacePage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
@@ -90,7 +64,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     { data: financials },
     { data: activations },
   ] = await Promise.all([
-    supabase.from('documents').select('id, original_filename, storage_path, uploaded_at').eq('proposal_id', params.id),
+    supabase.from('documents').select('id, original_filename, storage_path, document_type, uploaded_at').eq('proposal_id', params.id),
     supabase
       .from('ai_extractions')
       .select('extracted_json, model_used, status, created_at')
@@ -132,6 +106,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
 
   const stage = getWorkspaceStage(proposal);
   const tone = getTone({ totalScore: proposal.total_score, overallRiskLevel: proposal.overall_risk_level });
+  const canEdit = !proposal.submitted_at; // permiso real — igual que /edit, no solo "stage === draft"
 
   const missingFields = REQUIRED_EXTRACTION_FIELDS.filter(
     (f) => !extractedJson || extractedJson[f.key] === null || extractedJson[f.key] === undefined || extractedJson[f.key] === '',
@@ -146,25 +121,45 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     .filter((f: any) => f.economic_concepts?.nature === 'result' && f.estimated_amount !== null)
     .reduce((sum: number, f: any) => sum + Number(f.estimated_amount), 0);
   const roi = totalCost > 0 ? totalResult / totalCost : null;
+  const roiLabel = roi === null ? '—' : roi >= 3 ? 'Alto' : roi >= 1.5 ? 'Medio' : 'Bajo';
 
-  const executiveSummary = buildExecutiveSummary(proposal, scores ?? [], risks ?? [], pendingActivations);
+  const globalRiskScore = computeGlobalRiskScore((risks ?? []).map((r: any) => r.computed_score));
 
-  // Timeline: derivada de timestamps ya existentes en varias tablas — sin tabla nueva.
-  const timelineEvents: { label: string; date: string }[] = [];
-  timelineEvents.push({ label: 'Propuesta creada', date: proposal.created_at });
+  const executiveSummary = await generateExecutiveSummary({
+    proposal: { total_score: proposal.total_score, recommendation: proposal.recommendation, overall_risk_level: proposal.overall_risk_level },
+    scores: scores ?? [],
+    risks: risks ?? [],
+    pendingActivations,
+  });
+  const { strengths, weaknesses } = generateStrengthsAndWeaknesses(scores ?? []);
+
+  // Timeline con iconos — derivada de timestamps ya existentes, sin tabla nueva.
+  // Scoring/riesgo/financials se guardan atómicamente en la misma llamada (saveOutcome),
+  // así que es UN solo evento real, no tres marcas de tiempo distintas fabricadas.
+  const timelineEvents: { icon: string; label: string; date: string }[] = [];
+  timelineEvents.push({ icon: '📥', label: 'Propuesta recibida', date: proposal.created_at });
   for (const ex of extractionHistory ?? []) {
-    timelineEvents.push({ label: `Extracción (${ex.model_used})`, date: ex.created_at });
+    timelineEvents.push({ icon: '🤖', label: `Documento procesado (${ex.model_used})`, date: ex.created_at });
   }
   if (scores?.length) {
-    timelineEvents.push({ label: 'Evaluación calculada', date: proposal.updated_at ?? proposal.created_at });
+    timelineEvents.push({ icon: '📊', label: 'Evaluación completada (score, riesgo y financials)', date: proposal.updated_at ?? proposal.created_at });
   }
   for (const a of activations ?? []) {
-    timelineEvents.push({ label: `Activación añadida: ${(a as any).activation_catalog_items?.name ?? ''}`, date: (a as any).created_at });
+    timelineEvents.push({ icon: '🎯', label: `Activación añadida: ${(a as any).activation_catalog_items?.name ?? ''}`, date: (a as any).created_at });
   }
-  if (proposal.submitted_at) timelineEvents.push({ label: 'Propuesta enviada', date: proposal.submitted_at });
-  if (proposal.approved_at) timelineEvents.push({ label: 'Propuesta aprobada', date: proposal.approved_at });
-  if (proposal.finalized_at) timelineEvents.push({ label: 'Propuesta finalizada', date: proposal.finalized_at });
+  if (proposal.submitted_at) timelineEvents.push({ icon: '📤', label: 'Propuesta enviada', date: proposal.submitted_at });
+  if (proposal.rejected_at) timelineEvents.push({ icon: '❌', label: 'Propuesta rechazada', date: proposal.rejected_at });
+  if (proposal.approved_at) timelineEvents.push({ icon: '✅', label: 'Propuesta aprobada', date: proposal.approved_at });
+  if (proposal.finalized_at) timelineEvents.push({ icon: '🏁', label: 'Propuesta finalizada', date: proposal.finalized_at });
   timelineEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Adjuntos agrupados por tipo — solo se muestran categorías con al menos 1 documento.
+  const documentsByType = new Map<string, typeof documentsWithUrls>();
+  for (const doc of documentsWithUrls) {
+    const key = doc.document_type ?? 'other';
+    if (!documentsByType.has(key)) documentsByType.set(key, []);
+    documentsByType.get(key)!.push(doc);
+  }
 
   async function updateTitle(newTitle: string) {
     'use server';
@@ -179,17 +174,13 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         <Link href="/proposals">← Volver a propuestas</Link>
       </p>
 
-      {/* ── 1. HEADER ── */}
+      {/* ── HEADER ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 16 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <ConfidenceRing totalScore={proposal.total_score} overallRiskLevel={proposal.overall_risk_level} size="lg" />
           <div>
             <h1 style={{ margin: 0, fontSize: 22 }}>
-              {stage === 'draft' ? (
-                <InlineEditable value={proposal.title} onSave={updateTitle} fontSize={22} fontWeight={700} />
-              ) : (
-                proposal.title
-              )}
+              {canEdit ? <InlineEditable value={proposal.title} onSave={updateTitle} fontSize={22} fontWeight={700} /> : proposal.title}
             </h1>
             <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <StatusPill stage={stage} />
@@ -204,40 +195,33 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {stage === 'draft' && (
+          {canEdit && (
             <Link href={`/proposals/${proposal.id}/edit`} className="btn btn-outline">
               ✏️ Editar
             </Link>
           )}
-          <LifecycleActions
-            proposalId={proposal.id}
-            hasRecommendation={Boolean(proposal.recommendation)}
-            submittedAt={proposal.submitted_at}
-            approvedAt={proposal.approved_at}
-            finalizedAt={proposal.finalized_at}
-          />
+          <LifecycleActions proposalId={proposal.id} approvedAt={proposal.approved_at} finalizedAt={proposal.finalized_at} />
         </div>
       </div>
 
-      {/* ── 2. EXECUTIVE SUMMARY ── */}
+      {/* ── EXECUTIVE SUMMARY ── */}
       <InsightCard title="Executive Summary">
         {executiveSummary.map((paragraph, i) => (
-          <p key={i} style={{ margin: i === 0 ? '0 0 8px' : '0 0 8px' }}>
+          <p key={i} style={{ margin: '0 0 8px' }}>
             {paragraph}
           </p>
         ))}
       </InsightCard>
 
-      {/* ── 3. DECISION STRIP (fijo durante el scroll) ── */}
+      {/* ── DECISION STRIP (fijo, con score/riesgo/ROI/estado/recomendación + acciones) ── */}
       <DecisionStrip
+        proposalId={proposal.id}
         stage={stage}
         tone={tone}
-        proposalId={proposal.id}
         totalScore={proposal.total_score}
         overallRiskLevel={proposal.overall_risk_level}
+        roi={roi}
         recommendation={proposal.recommendation}
-        pendingActivationsCount={pendingActivations.length}
-        missingFieldsCount={missingFields.length}
       />
 
       {stage === 'draft' && (
@@ -259,13 +243,13 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         </div>
       )}
 
-      {/* ── 4. EVALUACIÓN DETALLADA ── */}
+      {/* ── EVALUACIÓN DETALLADA ── */}
       <div className="card">
         <div className="card-title">Evaluación detallada</div>
         {!scores?.length ? (
           <EmptyState message="Sin evaluación todavía." />
         ) : (
-          <div>
+          <>
             {(scores as any[]).map((s, i) => {
               const pct = Math.min(100, (Number(s.score_value) / Number(s.scoring_attributes?.max_score || 1)) * 100);
               return (
@@ -284,13 +268,54 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
                 </div>
               );
             })}
-          </div>
+
+            <div style={{ display: 'flex', gap: 24, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--c-line)' }}>
+              <div style={{ flex: 1 }}>
+                <div className="card-title" style={{ borderBottom: 'none', marginBottom: 6 }}>
+                  Fortalezas
+                </div>
+                {!strengths.length ? (
+                  <p style={{ fontSize: 13, color: 'var(--c-mid)', margin: 0 }}>Ninguna destaca especialmente.</p>
+                ) : (
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                    {strengths.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="card-title" style={{ borderBottom: 'none', marginBottom: 6 }}>
+                  Debilidades
+                </div>
+                {!weaknesses.length ? (
+                  <p style={{ fontSize: 13, color: 'var(--c-mid)', margin: 0 }}>Ninguna especialmente débil.</p>
+                ) : (
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                    {weaknesses.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
 
-      {/* ── 5. MATRIZ DE RIESGO ── */}
+      {/* ── MATRIZ DE RIESGO ── */}
       <div className="card">
-        <div className="card-title">Matriz de riesgo</div>
+        <div className="card-title">Riesgo</div>
+        {globalRiskScore !== null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 16 }}>
+            <ConfidenceRing totalScore={1 - globalRiskScore / 100} overallRiskLevel={proposal.overall_risk_level} size="lg" />
+            <div>
+              <div className="stat-label">Riesgo global</div>
+              <div className="stat-value">{proposal.overall_risk_level ?? '—'}</div>
+              <div style={{ fontSize: 12, color: 'var(--c-mid)' }}>{globalRiskScore} / 100</div>
+            </div>
+          </div>
+        )}
         {!risks?.length ? (
           <EmptyState message="Sin riesgos evaluados." />
         ) : (
@@ -323,21 +348,29 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         )}
       </div>
 
-      {/* ── 6. FINANCIALS ── */}
+      {/* ── FINANCIALS ── */}
       <div className="card">
         <div className="card-title">Financials</div>
-        <div className="stat-block" style={{ marginBottom: 16 }}>
+        <div className="stat-block" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 20 }}>
           <div>
-            <div className="stat-label">Coste total</div>
+            <div className="stat-label">Inversión prevista</div>
             <div className="stat-value" style={{ fontSize: 20 }}>{totalCost.toLocaleString('es-ES')} €</div>
           </div>
           <div>
-            <div className="stat-label">Retorno esperado</div>
+            <div className="stat-label">Inversión real</div>
+            <div className="stat-value" style={{ fontSize: 20, color: 'var(--c-mid)' }}>— (sin registrar)</div>
+          </div>
+          <div>
+            <div className="stat-label">Retorno previsto</div>
             <div className="stat-value" style={{ fontSize: 20 }}>{totalResult.toLocaleString('es-ES')} €</div>
           </div>
           <div>
             <div className="stat-label">ROI</div>
             <div className="stat-value" style={{ fontSize: 20 }}>{roi !== null ? `${roi.toFixed(1)}x` : '—'}</div>
+          </div>
+          <div>
+            <div className="stat-label">Desviación</div>
+            <div className="stat-value" style={{ fontSize: 20, color: 'var(--c-mid)' }}>— (sin coste real)</div>
           </div>
         </div>
         {!financials?.length ? (
@@ -366,92 +399,118 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         )}
       </div>
 
-      {/* ── 7. ACTIVACIONES ── */}
+      {/* ── ACTIVACIONES ── */}
       <div className="card">
-        <div className="card-title">Activaciones ({activations?.length ?? 0})</div>
+        <div className="card-title">Activaciones</div>
         {!activations?.length ? (
           <EmptyState message="Sin plan de activación definido." actionHref={`/proposals/${proposal.id}/edit`} actionLabel="Añadir acciones" />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Acción</th>
-                  <th>Canal</th>
-                  <th>Prioridad</th>
-                  <th>Responsable</th>
-                  <th>Fechas</th>
-                  <th>KPI</th>
-                  <th>Seguimiento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(activations as any[]).map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      {a.activation_catalog_items?.area} — {a.activation_catalog_items?.name}
-                    </td>
-                    <td>{a.channels?.name ?? '—'}</td>
-                    <td>{a.priority ?? '—'}</td>
-                    <td>{a.responsible ?? '—'}</td>
-                    <td style={{ fontSize: 12 }}>
-                      {a.start_date ?? '—'} → {a.end_date ?? '—'}
-                    </td>
-                    <td>{a.kpi_definitions?.name ? `${a.kpi_definitions.name}: ${a.kpi_target ?? '—'}` : '—'}</td>
-                    <td>
-                      <ActivationFollowUp actionId={a.id} currentStatus={a.status} currentKpiResult={a.kpi_result} />
-                    </td>
+          <>
+            <div className="stat-block" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 20 }}>
+              <div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{activations.length}</div>
+                <div className="stat-label">Activaciones</div>
+              </div>
+              <div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{(activations as any[]).filter((a) => a.priority === 'Alta').length}</div>
+                <div className="stat-label">Alta prioridad</div>
+              </div>
+              <div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{(activations as any[]).filter((a) => a.is_reusable).length}</div>
+                <div className="stat-label">Reutilizables</div>
+              </div>
+              <div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{roiLabel}</div>
+                <div className="stat-label">ROI esperado</div>
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Acción</th>
+                    <th>Canal</th>
+                    <th>Prioridad</th>
+                    <th>Responsable</th>
+                    <th>Fechas</th>
+                    <th>KPI</th>
+                    <th>Seguimiento</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(activations as any[]).map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        {a.activation_catalog_items?.area} — {a.activation_catalog_items?.name}
+                      </td>
+                      <td>{a.channels?.name ?? '—'}</td>
+                      <td>{a.priority ?? '—'}</td>
+                      <td>{a.responsible ?? '—'}</td>
+                      <td style={{ fontSize: 12 }}>
+                        {a.start_date ?? '—'} → {a.end_date ?? '—'}
+                      </td>
+                      <td>{a.kpi_definitions?.name ? `${a.kpi_definitions.name}: ${a.kpi_target ?? '—'}` : '—'}</td>
+                      <td>
+                        <ActivationFollowUp actionId={a.id} currentStatus={a.status} currentKpiResult={a.kpi_result} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
-      {/* ── 8. TIMELINE ── */}
+      {/* ── TIMELINE (con iconos, estilo GitHub/Linear) ── */}
       <div className="card">
         <div className="card-title">Timeline</div>
-        <ul className="mini-list">
+        <div className="timeline">
           {timelineEvents.map((ev, i) => (
-            <li key={i}>
-              <span>{ev.label}</span>
-              <span style={{ color: 'var(--c-mid)', fontSize: 12 }}>{new Date(ev.date).toLocaleString('es-ES')}</span>
-            </li>
+            <div key={i} className="timeline-item">
+              <div className="timeline-icon">{ev.icon}</div>
+              <div className="timeline-body">
+                <div style={{ fontSize: 13 }}>{ev.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--c-mid)' }}>{new Date(ev.date).toLocaleString('es-ES')}</div>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
 
-      {/* ── 9. COMENTARIOS INTERNOS — placeholder explícito, requiere tabla nueva ── */}
-      <div className="card">
-        <div className="card-title">Comentarios internos</div>
-        <EmptyState message="Aún no implementado — requiere una tabla nueva de comentarios, fuera del alcance de esta fase (sin cambios de modelo de datos)." />
-      </div>
+      {/* Comentarios internos: oculto a propósito hasta que exista persistencia real
+          (proposal_comments) — ver conversación sobre esta fase. No se muestra ninguna
+          caja vacía. */}
 
-      {/* ── 10. ARCHIVOS ADJUNTOS ── */}
+      {/* ── ARCHIVOS ADJUNTOS (categorizados) ── */}
       <div className="card">
         <div className="card-title">Archivos adjuntos ({documentsWithUrls.length})</div>
         {!documentsWithUrls.length ? (
           <EmptyState message="Sin documentos adjuntos." />
         ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 13 }}>
-            {documentsWithUrls.map((doc) => (
-              <li key={doc.id} style={{ padding: '6px 0', display: 'flex', justifyContent: 'space-between' }}>
-                <span>{doc.original_filename}</span>
-                {doc.url ? (
-                  <a href={doc.url} target="_blank" rel="noreferrer">
-                    Descargar
-                  </a>
-                ) : (
-                  <span style={{ color: 'var(--c-mid)' }}>—</span>
-                )}
-              </li>
-            ))}
-          </ul>
+          DOCUMENT_TYPE_ORDER.filter((type) => documentsByType.has(type)).map((type) => (
+            <div key={type} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 6 }}>{DOCUMENT_TYPE_LABEL[type]}</div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 13 }}>
+                {documentsByType.get(type)!.map((doc) => (
+                  <li key={doc.id} style={{ padding: '6px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{doc.original_filename}</span>
+                    {doc.url ? (
+                      <a href={doc.url} target="_blank" rel="noreferrer">
+                        Descargar
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--c-mid)' }}>—</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         )}
       </div>
 
-      {/* ── 11. HISTORIAL DE CAMBIOS — versiones reales de ai_extractions, nunca se borran ── */}
+      {/* ── HISTORIAL DE CAMBIOS ── */}
       <div className="card">
         <div className="card-title">Historial de cambios</div>
         {!extractionHistory?.length ? (
