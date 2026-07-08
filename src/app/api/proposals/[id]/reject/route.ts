@@ -8,7 +8,7 @@ interface RouteParams {
   params: { id: string };
 }
 
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   const supabase = createSupabaseServerClient();
   const profile = await getCurrentProfile(supabase);
   if (!profile) {
@@ -33,9 +33,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Evalúa la propuesta antes de poder rechazarla.' }, { status: 400 });
   }
 
+  const body = await request.json().catch(() => null);
+  const rejectionReason = typeof body?.reason === 'string' ? body.reason.trim() : null;
+
   const { error: updateError } = await supabase
     .from('proposals')
-    .update({ rejected_at: new Date().toISOString() })
+    .update({ rejected_at: new Date().toISOString(), rejection_reason: rejectionReason })
     .eq('id', params.id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
