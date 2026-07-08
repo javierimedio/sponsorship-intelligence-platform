@@ -23,6 +23,7 @@ export interface EconomicConceptCatalogItem {
   id: string;
   name: string;
   nature: 'cost' | 'result';
+  blockType: string | null;
 }
 
 export interface EvaluationCatalog {

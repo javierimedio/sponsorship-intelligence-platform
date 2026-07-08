@@ -1,7 +1,7 @@
 // src/app/intake/intake-form.tsx
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { createSupabaseBrowserClient } from '@/infrastructure/supabase/browser-client';
 
 interface IntakeFormProps {
@@ -38,11 +38,17 @@ interface CatalogConcept {
   id: string;
   name: string;
   nature: 'cost' | 'result';
+  blockType: string | null;
 }
 interface Catalog {
   scoringAttributes: CatalogAttribute[];
   riskFactors: CatalogRiskFactor[];
   economicConcepts: CatalogConcept[];
+}
+interface ActivationCatalogItem {
+  id: string;
+  area: string;
+  name: string;
 }
 
 interface EvaluationResult {
@@ -107,11 +113,53 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
   const [manualCollaborationType, setManualCollaborationType] = useState('');
   const [manualSummary, setManualSummary] = useState('');
   const [manualAmount, setManualAmount] = useState('');
+  const [manualWebsite, setManualWebsite] = useState('');
+  const [manualFacebook, setManualFacebook] = useState('');
+  const [manualInstagram, setManualInstagram] = useState('');
+  const [manualYoutube, setManualYoutube] = useState('');
 
   // Formulario de evaluación manual: valores por id de catálogo
   const [manualScores, setManualScores] = useState<Record<string, string>>({});
   const [manualRisks, setManualRisks] = useState<Record<string, { level: string; impact: string }>>({});
   const [manualFinancials, setManualFinancials] = useState<Record<string, string>>({});
+
+  // Plan de activación — disponible en cuanto hay un resultado de evaluación, sea del
+  // camino manual o del automático.
+  const [activationCatalog, setActivationCatalog] = useState<ActivationCatalogItem[] | null>(null);
+  const [selectedActivationIds, setSelectedActivationIds] = useState<string[]>([]);
+  const [activationNotes, setActivationNotes] = useState('');
+  const [activationMessage, setActivationMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (result && activationCatalog === null) {
+      fetch('/api/activation-catalog')
+        .then((res) => safeJson(res))
+        .then((data) => setActivationCatalog(Array.isArray(data) ? data : []))
+        .catch(() => setActivationCatalog([]));
+    }
+  }, [result, activationCatalog]);
+
+  function toggleActivation(id: string) {
+    setSelectedActivationIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleActivationSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!proposalId) return;
+
+    try {
+      const res = await fetch('/api/activations/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, activationCatalogItemIds: selectedActivationIds, notes: activationNotes }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error ?? 'Error al guardar el plan de activación.');
+      setActivationMessage('Plan de activación guardado.');
+    } catch (error) {
+      setActivationMessage((error as Error).message);
+    }
+  }
 
   const loading = [
     'creating-proposal',
@@ -226,6 +274,10 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
         currency: 'EUR',
         opportunities: [],
         risks: [],
+        website: manualWebsite || null,
+        social_facebook: manualFacebook || null,
+        social_instagram: manualInstagram || null,
+        social_youtube: manualYoutube || null,
       };
 
       const res = await fetch('/api/extractions/manual', {
@@ -351,6 +403,24 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Importe total estimado (€)</label>
             <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} style={{ width: '100%', padding: 6 }} />
           </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Web del solicitante</label>
+            <input type="text" value={manualWebsite} onChange={(e) => setManualWebsite(e.target.value)} placeholder="https://..." style={{ width: '100%', padding: 6 }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Facebook</label>
+              <input type="text" value={manualFacebook} onChange={(e) => setManualFacebook(e.target.value)} placeholder="https://facebook.com/..." style={{ width: '100%', padding: 6 }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Instagram</label>
+              <input type="text" value={manualInstagram} onChange={(e) => setManualInstagram(e.target.value)} placeholder="https://instagram.com/..." style={{ width: '100%', padding: 6 }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>YouTube</label>
+              <input type="text" value={manualYoutube} onChange={(e) => setManualYoutube(e.target.value)} placeholder="https://youtube.com/..." style={{ width: '100%', padding: 6 }} />
+            </div>
+          </div>
           <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
             {loading ? PHASE_LABEL[phase] : 'Guardar extracción y continuar →'}
           </button>
@@ -414,18 +484,29 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             </div>
           ))}
 
-          <h3 style={{ fontSize: 13, marginTop: 16 }}>Conceptos económicos (€)</h3>
-          {catalog.economicConcepts.map((c) => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <label style={{ fontSize: 12, flex: 1 }}>
-                {c.name} ({c.nature === 'cost' ? 'coste' : 'resultado'})
-              </label>
-              <input
-                type="number"
-                value={manualFinancials[c.id] ?? ''}
-                onChange={(e) => setManualFinancials((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                style={{ width: 120, padding: 4 }}
-              />
+          <h3 style={{ fontSize: 13, marginTop: 16 }}>Costes-ROI (por bloque económico)</h3>
+          {Object.entries(
+            catalog.economicConcepts.reduce<Record<string, CatalogConcept[]>>((acc, c) => {
+              const key = c.blockType ?? 'Otros';
+              (acc[key] ??= []).push(c);
+              return acc;
+            }, {}),
+          ).map(([blockType, concepts]) => (
+            <div key={blockType} style={{ marginBottom: 10 }}>
+              <strong style={{ fontSize: 12 }}>{blockType}</strong>
+              {concepts.map((c) => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <label style={{ fontSize: 12, flex: 1 }}>
+                    {c.name} ({c.nature === 'cost' ? 'coste' : 'resultado'})
+                  </label>
+                  <input
+                    type="number"
+                    value={manualFinancials[c.id] ?? ''}
+                    onChange={(e) => setManualFinancials((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                    style={{ width: 120, padding: 4 }}
+                  />
+                </div>
+              ))}
             </div>
           ))}
 
@@ -501,6 +582,52 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
               ))}
             </ul>
           </details>
+        </div>
+      )}
+
+      {result && (
+        <div style={{ marginTop: 20, border: '1px solid #ddd', borderRadius: 4, padding: 16 }}>
+          <h2 style={{ fontSize: 16, marginBottom: 12 }}>Plan de activación</h2>
+          {activationCatalog === null ? (
+            <p style={{ fontSize: 13, color: '#888' }}>Cargando catálogo...</p>
+          ) : (
+            <form onSubmit={handleActivationSubmit}>
+              {Object.entries(
+                activationCatalog.reduce<Record<string, ActivationCatalogItem[]>>((acc, item) => {
+                  (acc[item.area] ??= []).push(item);
+                  return acc;
+                }, {}),
+              ).map(([area, items]) => (
+                <div key={area} style={{ marginBottom: 10 }}>
+                  <strong style={{ fontSize: 12 }}>{area}</strong>
+                  {items.map((item) => (
+                    <label key={item.id} style={{ display: 'block', fontSize: 13, marginTop: 4 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedActivationIds.includes(item.id)}
+                        onChange={() => toggleActivation(item.id)}
+                        style={{ marginRight: 6 }}
+                      />
+                      {item.name}
+                    </label>
+                  ))}
+                </div>
+              ))}
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginTop: 12, marginBottom: 4 }}>
+                Notas del plan de activación
+              </label>
+              <textarea
+                value={activationNotes}
+                onChange={(e) => setActivationNotes(e.target.value)}
+                rows={2}
+                style={{ width: '100%', padding: 6 }}
+              />
+              <button type="submit" className="btn btn-amber" style={{ marginTop: 12 }}>
+                Guardar plan de activación
+              </button>
+              {activationMessage && <p style={{ fontSize: 12, marginTop: 8, color: 'green' }}>{activationMessage}</p>}
+            </form>
+          )}
         </div>
       )}
     </div>

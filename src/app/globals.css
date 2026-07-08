@@ -68,8 +68,20 @@ h1, h2, h3 {
   gap: 14px;
 }
 .topbar-brand img {
-  height: 22px;
   object-fit: contain;
+}
+.topbar-brand img.brand-logo-main {
+  height: 34px;
+}
+.topbar-brand img.brand-logo-mini {
+  height: 13px;
+}
+.topbar-tool-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: white;
+  white-space: nowrap;
 }
 .topbar-brand .brand-sep {
   color: rgba(255, 255, 255, .3);
@@ -90,6 +102,11 @@ h1, h2, h3 {
   background: rgba(255, 255, 255, .12);
   color: white;
   text-decoration: none;
+}
+.topbar-nav a.active {
+  background: rgba(255, 255, 255, .16);
+  color: white;
+  box-shadow: inset 0 -2px 0 var(--c-amber);
 }
 .topbar-right {
   display: flex;

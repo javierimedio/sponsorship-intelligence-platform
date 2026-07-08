@@ -22,7 +22,14 @@ export default async function ProposalDetailPage({ params }: PageProps) {
     );
   }
 
-  const [{ data: extraction }, { data: scores }, { data: risks }, { data: financials }] = await Promise.all([
+  const [
+    { data: extraction },
+    { data: scores },
+    { data: risks },
+    { data: financials },
+    { data: documents },
+    { data: activations },
+  ] = await Promise.all([
     supabase
       .from('ai_extractions')
       .select('extracted_json, model_used, created_at')
@@ -40,12 +47,31 @@ export default async function ProposalDetailPage({ params }: PageProps) {
       .eq('proposal_id', params.id),
     supabase
       .from('proposal_financials')
-      .select('estimated_amount, source, economic_concepts(name, nature)')
+      .select('estimated_amount, source, economic_concepts(name, nature, block_type)')
+      .eq('proposal_id', params.id),
+    supabase
+      .from('documents')
+      .select('id, storage_path, original_filename, document_type, uploaded_at')
+      .eq('proposal_id', params.id)
+      .order('uploaded_at', { ascending: false }),
+    supabase
+      .from('proposal_activations')
+      .select('notes, source, activation_catalog_items(area, name)')
       .eq('proposal_id', params.id),
   ]);
 
+  // Genera enlaces de descarga temporales (1h) — el bucket es privado, RLS de storage.objects
+  // exige que el primer segmento de la ruta sea tu organization_id, igual que en la subida.
+  const documentsWithUrls = await Promise.all(
+    (documents ?? []).map(async (doc) => {
+      const { data: signed } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 3600);
+      return { ...doc, url: signed?.signedUrl ?? null };
+    }),
+  );
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const extractedJson = (extraction?.extracted_json ?? {}) as Record<string, any>;
+  const hasSocial = extractedJson.social_facebook || extractedJson.social_instagram || extractedJson.social_youtube;
 
   return (
     <AppShell>
@@ -93,8 +119,73 @@ export default async function ProposalDetailPage({ params }: PageProps) {
             <strong>Importe estimado:</strong> {extractedJson.estimated_total_amount ?? '—'}{' '}
             {extractedJson.currency ?? ''}
           </p>
+          {extractedJson.website && (
+            <p>
+              <strong>Web:</strong>{' '}
+              <a href={extractedJson.website} target="_blank" rel="noopener noreferrer">
+                {extractedJson.website}
+              </a>
+            </p>
+          )}
+          {hasSocial && (
+            <p>
+              <strong>Redes sociales:</strong>{' '}
+              {extractedJson.social_facebook && (
+                <a href={extractedJson.social_facebook} target="_blank" rel="noopener noreferrer" style={{ marginRight: 10 }}>
+                  Facebook
+                </a>
+              )}
+              {extractedJson.social_instagram && (
+                <a href={extractedJson.social_instagram} target="_blank" rel="noopener noreferrer" style={{ marginRight: 10 }}>
+                  Instagram
+                </a>
+              )}
+              {extractedJson.social_youtube && (
+                <a href={extractedJson.social_youtube} target="_blank" rel="noopener noreferrer">
+                  YouTube
+                </a>
+              )}
+            </p>
+          )}
         </div>
       )}
+
+      <div className="card">
+        <div className="card-title">Documentos adjuntos</div>
+        {!documentsWithUrls.length ? (
+          <p style={{ color: 'var(--c-mid)', margin: 0 }}>No hay documentos adjuntos.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {documentsWithUrls.map((doc) => (
+              <li
+                key={doc.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 0',
+                  borderBottom: '1px solid var(--c-line)',
+                }}
+              >
+                <span>{doc.original_filename ?? doc.storage_path.split('/').pop()}</span>
+                {doc.url ? (
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                  >
+                    Descargar
+                  </a>
+                ) : (
+                  <span style={{ color: 'var(--c-red)', fontSize: 12 }}>No disponible</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="card">
         <div className="card-title">Scoring por atributo</div>
@@ -151,10 +242,11 @@ export default async function ProposalDetailPage({ params }: PageProps) {
       </div>
 
       <div className="card">
-        <div className="card-title">Líneas financieras</div>
+        <div className="card-title">Costes-ROI</div>
         <table>
           <thead>
             <tr>
+              <th>Bloque</th>
               <th>Concepto</th>
               <th>Naturaleza</th>
               <th>Importe</th>
@@ -164,6 +256,7 @@ export default async function ProposalDetailPage({ params }: PageProps) {
           <tbody>
             {(financials ?? []).map((f: any, i: number) => (
               <tr key={i}>
+                <td>{f.economic_concepts?.block_type ?? '—'}</td>
                 <td>{f.economic_concepts?.name}</td>
                 <td>{f.economic_concepts?.nature === 'cost' ? 'Coste' : 'Resultado'}</td>
                 <td>{f.estimated_amount !== null ? `${Number(f.estimated_amount).toLocaleString('es-ES')} €` : '—'}</td>
@@ -172,6 +265,34 @@ export default async function ProposalDetailPage({ params }: PageProps) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Plan de activación</div>
+        {!activations?.length ? (
+          <p style={{ color: 'var(--c-mid)', margin: 0 }}>Sin plan de activación definido.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Área</th>
+                <th>Acción</th>
+                <th>Notas</th>
+                <th>Origen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activations.map((a: any, i: number) => (
+                <tr key={i}>
+                  <td>{a.activation_catalog_items?.area}</td>
+                  <td>{a.activation_catalog_items?.name}</td>
+                  <td>{a.notes || '—'}</td>
+                  <td>{a.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </AppShell>
   );

@@ -22,7 +22,7 @@ export class SupabaseEvaluationCatalogRepository implements EvaluationCatalogRep
         .select('id, name, risk_blocks!inner(name, organization_id)')
         .eq('risk_blocks.organization_id', organizationId),
       this.client.from('risk_matrix_rules').select('level, impact, score').eq('organization_id', organizationId),
-      this.client.from('economic_concepts').select('id, name, nature').eq('organization_id', organizationId),
+      this.client.from('economic_concepts').select('id, name, nature, block_type').eq('organization_id', organizationId),
     ]);
 
     if (attrResult.error) throw attrResult.error;
@@ -51,6 +51,7 @@ export class SupabaseEvaluationCatalogRepository implements EvaluationCatalogRep
         id: row.id,
         name: row.name,
         nature: row.nature,
+        blockType: row.block_type ?? null,
       })),
     };
   }

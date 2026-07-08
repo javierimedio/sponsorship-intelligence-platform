@@ -57,7 +57,8 @@ export class GeminiProvider implements AIProvider {
       'con esta forma exacta: {"requester_name": string|null, "requester_org": string|null, ' +
       '"collaboration_type": string|null, "summary": string, "assets_offered": string[], ' +
       '"estimated_total_amount": number|null, "currency": string|null, ' +
-      '"opportunities": string[], "risks": string[]}. ' +
+      '"opportunities": string[], "risks": string[], "website": string|null, ' +
+      '"social_facebook": string|null, "social_instagram": string|null, "social_youtube": string|null}. ' +
       'Si un dato no aparece en el documento, usa null. No inventes datos que no estén en el texto.';
 
     const result = await askGeminiForJson(
