@@ -2,14 +2,7 @@
 
 import { DocumentId, OrganizationId, ProposalId, TenantId, UserId } from '../shared/ids';
 
-export type DocumentType =
-  | 'contract'
-  | 'annex'
-  | 'invoice'
-  | 'presentation'
-  | 'email'
-  | 'image'
-  | 'other';
+export type DocumentType = 'original' | 'email' | 'ai_generated' | 'image' | 'dossier' | 'other';
 
 export class ProposalDocument {
   private constructor(
