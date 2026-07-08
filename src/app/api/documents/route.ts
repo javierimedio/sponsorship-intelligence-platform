@@ -7,7 +7,10 @@ import { createSupabaseServerClient } from '@/infrastructure/supabase/server-cli
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { SupabaseDocumentRepository } from '@/infrastructure/supabase/document-repository';
 import { RegisterDocumentUseCase } from '@/application/use-cases/intake/register-document';
+import { DocumentType } from '@/domain/intake/document';
 import { asProposalId } from '@/domain/shared/ids';
+
+const VALID_TYPES: DocumentType[] = ['original', 'email', 'ai_generated', 'image', 'dossier', 'other'];
 
 export async function POST(request: NextRequest) {
   const supabase = createSupabaseServerClient();
@@ -21,6 +24,7 @@ export async function POST(request: NextRequest) {
   const proposalId = typeof body?.proposalId === 'string' ? body.proposalId : '';
   const storagePath = typeof body?.storagePath === 'string' ? body.storagePath : '';
   const originalFilename = typeof body?.originalFilename === 'string' ? body.originalFilename : undefined;
+  const documentType: DocumentType = VALID_TYPES.includes(body?.documentType) ? body.documentType : 'other';
 
   if (!proposalId || !storagePath) {
     return NextResponse.json({ error: 'proposalId y storagePath son obligatorios.' }, { status: 400 });
@@ -34,6 +38,7 @@ export async function POST(request: NextRequest) {
       organizationId: profile.organizationId,
       proposalId: asProposalId(proposalId),
       storagePath,
+      documentType,
       originalFilename,
       uploadedBy: profile.userId,
     });
