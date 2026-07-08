@@ -36,6 +36,7 @@ const STAGE_LABEL: Record<WorkspaceStage, string> = {
   rejected: 'Rechazada',
   approved: 'Aprobada',
   finalized: 'Finalizada',
+  archived: 'Archivada',
 };
 const STAGE_COLOR: Record<WorkspaceStage, { fg: string; bg: string }> = {
   draft: { fg: 'var(--c-mid)', bg: 'var(--c-light)' },
@@ -43,6 +44,7 @@ const STAGE_COLOR: Record<WorkspaceStage, { fg: string; bg: string }> = {
   rejected: { fg: 'var(--c-red)', bg: 'var(--c-red-l)' },
   approved: { fg: 'var(--c-amber)', bg: 'var(--c-amber-l)' },
   finalized: { fg: 'var(--c-green)', bg: 'var(--c-green-l)' },
+  archived: { fg: 'var(--c-mid)', bg: 'var(--c-light)' },
 };
 
 export function StatusPill({ stage }: { stage: WorkspaceStage }) {
