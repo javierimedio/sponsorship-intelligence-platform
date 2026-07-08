@@ -118,7 +118,7 @@ export default async function DashboardPage() {
   const approvedCount = rows.filter((p) => p.approved_at).length;
 
   // Pipeline: cuenta por etapa del Workspace adaptativo
-  const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, rejected: 0, approved: 0, finalized: 0 };
+  const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, rejected: 0, approved: 0, finalized: 0, archived: 0 };
   for (const p of rows) {
     pipelineCounts[getWorkspaceStage(p)]++;
   }
@@ -203,7 +203,9 @@ export default async function DashboardPage() {
       <div style={{ display: 'flex', gap: 16 }}>
         {/* Pregunta 3: ¿Cuál necesita mi aprobación? */}
         <div className="card" style={{ flex: 1 }}>
-          <div className="card-title">Esperando tu decisión ({awaitingApproval.length})</div>
+          <div className="card-title">
+            <Link href="/proposals?estado=pendiente">Esperando tu decisión ({awaitingApproval.length}) →</Link>
+          </div>
           {!awaitingApproval.length ? (
             <EmptyState message="Nada pendiente de aprobación." />
           ) : (
@@ -224,7 +226,9 @@ export default async function DashboardPage() {
 
       {/* Pregunta 2: ¿Cuáles son prioritarias? — tarjetas visuales, no lista */}
       <div className="card">
-        <div className="card-title">Prioritarias</div>
+        <div className="card-title">
+          <Link href="/proposals">Prioritarias →</Link>
+        </div>
         {!priority.length ? (
           <EmptyState message="Aún no hay propuestas evaluadas." />
         ) : (
