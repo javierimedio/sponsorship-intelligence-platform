@@ -2,11 +2,38 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/infrastructure/supabase/browser-client';
+
+interface EditingExtraction {
+  requesterName: string;
+  requesterOrg: string;
+  collaborationType: string;
+  summary: string;
+  amount: string;
+  website: string;
+  facebook: string;
+  instagram: string;
+  youtube: string;
+}
+
+export interface EditingData {
+  proposalId: string;
+  documentId: string | null;
+  title: string;
+  brandId: string | null;
+  extraction: EditingExtraction | null;
+  scores: Record<string, string>;
+  risks: Record<string, { level: string; impact: string }>;
+  financials: Record<string, string>;
+  activationIds: string[];
+  activationNotes: string;
+}
 
 interface IntakeFormProps {
   organizationId: string;
   manualMode: boolean;
+  editing?: EditingData;
 }
 
 type Phase =
@@ -22,6 +49,11 @@ type Phase =
   | 'saving-manual-evaluation'
   | 'done'
   | 'error';
+
+interface Brand {
+  id: string;
+  name: string;
+}
 
 interface CatalogAttribute {
   id: string;
@@ -94,40 +126,58 @@ async function safeJson(res: Response): Promise<any> {
   }
 }
 
-export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
-  const [title, setTitle] = useState('');
+export function IntakeForm({ organizationId, manualMode, editing }: IntakeFormProps) {
+  const [title, setTitle] = useState(editing?.title ?? '');
   const [file, setFile] = useState<File | null>(null);
-  const [phase, setPhase] = useState<Phase>('input');
+  const [phase, setPhase] = useState<Phase>(editing ? 'manual-extract' : 'input');
   const [message, setMessage] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
-  const [extractedSummary, setExtractedSummary] = useState<string | null>(null);
+  const [extractedSummary, setExtractedSummary] = useState<string | null>(
+    editing?.extraction?.summary || null,
+  );
+  const [submitted, setSubmitted] = useState(false);
+
+  // Marcas de la organización — "" = Corporativo (no es una marca concreta)
+  const [brands, setBrands] = useState<Brand[] | null>(null);
+  const [brandId, setBrandId] = useState(editing?.brandId ?? '');
+
+  useEffect(() => {
+    fetch('/api/brands')
+      .then((res) => safeJson(res))
+      .then((data) => setBrands(Array.isArray(data) ? data : []))
+      .catch(() => setBrands([]));
+  }, []);
 
   // Estado que sobrevive entre pasos del modo manual
-  const [proposalId, setProposalId] = useState<string | null>(null);
-  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [proposalId, setProposalId] = useState<string | null>(editing?.proposalId ?? null);
+  const [documentId, setDocumentId] = useState<string | null>(editing?.documentId ?? null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
 
   // Formulario de extracción manual
-  const [manualRequesterName, setManualRequesterName] = useState('');
-  const [manualRequesterOrg, setManualRequesterOrg] = useState('');
-  const [manualCollaborationType, setManualCollaborationType] = useState('');
-  const [manualSummary, setManualSummary] = useState('');
-  const [manualAmount, setManualAmount] = useState('');
-  const [manualWebsite, setManualWebsite] = useState('');
-  const [manualFacebook, setManualFacebook] = useState('');
-  const [manualInstagram, setManualInstagram] = useState('');
-  const [manualYoutube, setManualYoutube] = useState('');
+  const [manualRequesterName, setManualRequesterName] = useState(editing?.extraction?.requesterName ?? '');
+  const [manualRequesterOrg, setManualRequesterOrg] = useState(editing?.extraction?.requesterOrg ?? '');
+  const [manualCollaborationType, setManualCollaborationType] = useState(
+    editing?.extraction?.collaborationType ?? '',
+  );
+  const [manualSummary, setManualSummary] = useState(editing?.extraction?.summary ?? '');
+  const [manualAmount, setManualAmount] = useState(editing?.extraction?.amount ?? '');
+  const [manualWebsite, setManualWebsite] = useState(editing?.extraction?.website ?? '');
+  const [manualFacebook, setManualFacebook] = useState(editing?.extraction?.facebook ?? '');
+  const [manualInstagram, setManualInstagram] = useState(editing?.extraction?.instagram ?? '');
+  const [manualYoutube, setManualYoutube] = useState(editing?.extraction?.youtube ?? '');
 
   // Formulario de evaluación manual: valores por id de catálogo
-  const [manualScores, setManualScores] = useState<Record<string, string>>({});
-  const [manualRisks, setManualRisks] = useState<Record<string, { level: string; impact: string }>>({});
-  const [manualFinancials, setManualFinancials] = useState<Record<string, string>>({});
+  const [manualScores, setManualScores] = useState<Record<string, string>>(editing?.scores ?? {});
+  const [manualRisks, setManualRisks] = useState<Record<string, { level: string; impact: string }>>(
+    editing?.risks ?? {},
+  );
+  const [manualFinancials, setManualFinancials] = useState<Record<string, string>>(editing?.financials ?? {});
 
   // Plan de activación — disponible en cuanto hay un resultado de evaluación, sea del
   // camino manual o del automático.
   const [activationCatalog, setActivationCatalog] = useState<ActivationCatalogItem[] | null>(null);
-  const [selectedActivationIds, setSelectedActivationIds] = useState<string[]>([]);
-  const [activationNotes, setActivationNotes] = useState('');
+  const [selectedActivationIds, setSelectedActivationIds] = useState<string[]>(editing?.activationIds ?? []);
+  const [activationNotes, setActivationNotes] = useState(editing?.activationNotes ?? '');
   const [activationMessage, setActivationMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -161,6 +211,20 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
     }
   }
 
+  async function handleSubmitProposal() {
+    if (!proposalId) return;
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/submit`, { method: 'POST' });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error ?? 'Error al enviar la propuesta.');
+      setSubmitted(true);
+      setMessage('Propuesta enviada. Ya no se puede editar.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }
+
   const loading = [
     'creating-proposal',
     'uploading',
@@ -189,12 +253,12 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
     }
 
     try {
-      // 1. Crear la propuesta
+      // 1. Crear la propuesta (queda en estado "Borrador" hasta que se envíe explícitamente)
       setPhase('creating-proposal');
       const proposalRes = await fetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, brandId: brandId || null }),
       });
       const proposal = await safeJson(proposalRes);
       if (!proposalRes.ok) throw new Error(proposal.error ?? 'Error al crear la propuesta.');
@@ -248,9 +312,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
 
       setResult(evaluation);
       setPhase('done');
-      setMessage(`Propuesta "${proposal.title}" extraída y evaluada correctamente.`);
-      setTitle('');
-      setFile(null);
+      setMessage(`Propuesta "${proposal.title}" extraída y evaluada correctamente. Sigue en Borrador hasta que la envíes.`);
     } catch (error) {
       setPhase('error');
       setMessage((error as Error).message);
@@ -263,6 +325,17 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
 
     try {
       setPhase('saving-manual-extraction');
+
+      // En modo edición, esta pantalla también sirve para corregir título/marca.
+      if (editing) {
+        const patchRes = await fetch(`/api/proposals/${proposalId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, brandId: brandId || null }),
+        });
+        const patchData = await safeJson(patchRes);
+        if (!patchRes.ok) throw new Error(patchData.error ?? 'Error al actualizar la propuesta.');
+      }
 
       const extractedJson = {
         requester_name: manualRequesterName || null,
@@ -337,7 +410,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
 
       setResult(evaluation);
       setPhase('done');
-      setMessage('Propuesta evaluada manualmente (source="manual").');
+      setMessage('Propuesta evaluada manualmente (source="manual"). Sigue en Borrador hasta que la envíes.');
     } catch (error) {
       setPhase('error');
       setMessage((error as Error).message);
@@ -346,7 +419,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
 
   return (
     <div>
-      {phase === 'input' || loading ? (
+      {phase === 'input' || (loading && !editing) ? (
         <form onSubmit={handleInitialSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
@@ -364,6 +437,20 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
 
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Organización / Marca
+            </label>
+            <select value={brandId} onChange={(e) => setBrandId(e.target.value)} disabled={loading} style={{ width: '100%', padding: 8 }}>
+              <option value="">Corporativo (Gor Factory)</option>
+              {(brands ?? []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
               Documento (PDF/imagen) — {manualMode ? 'para archivo, tú introduces los datos a mano' : 'la IA lo leerá'}
             </label>
             <input
@@ -375,7 +462,7 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
           </div>
 
           <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
-            {loading ? PHASE_LABEL[phase] : manualMode ? 'Crear propuesta →' : 'Crear, extraer y evaluar'}
+            {loading ? PHASE_LABEL[phase] : manualMode ? 'Crear propuesta (Borrador) →' : 'Crear, extraer y evaluar'}
           </button>
         </form>
       ) : null}
@@ -383,6 +470,27 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
       {phase === 'manual-extract' && (
         <form onSubmit={handleManualExtractionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20, padding: 16, border: '1px solid #ddd', borderRadius: 4 }}>
           <h2 style={{ fontSize: 15 }}>Extracción manual (equivalente al Agente 1)</h2>
+
+          {editing && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Título de la propuesta</label>
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: '100%', padding: 6 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Organización / Marca</label>
+                <select value={brandId} onChange={(e) => setBrandId(e.target.value)} style={{ width: '100%', padding: 6 }}>
+                  <option value="">Corporativo (Gor Factory)</option>
+                  {(brands ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Solicitante (persona)</label>
             <input type="text" value={manualRequesterName} onChange={(e) => setManualRequesterName(e.target.value)} style={{ width: '100%', padding: 6 }} />
@@ -629,6 +737,24 @@ export function IntakeForm({ organizationId, manualMode }: IntakeFormProps) {
             </form>
           )}
         </div>
+      )}
+
+      {result && !submitted && (
+        <div style={{ marginTop: 20, padding: 16, background: 'var(--c-amber-l, #FAEEDA)', borderRadius: 4 }}>
+          <p style={{ fontSize: 13, margin: '0 0 10px' }}>
+            La propuesta sigue en <strong>Borrador</strong>: puedes volver más tarde desde su ficha y editar
+            cualquier paso. Cuando esté lista de verdad, envíala — a partir de ahí queda bloqueada.
+          </p>
+          <button type="button" className="btn btn-amber" onClick={handleSubmitProposal}>
+            ✅ Enviar propuesta (deja de ser Borrador)
+          </button>
+        </div>
+      )}
+
+      {submitted && proposalId && (
+        <p style={{ marginTop: 16 }}>
+          <Link href={`/proposals/${proposalId}`}>Ver la ficha de la propuesta →</Link>
+        </p>
       )}
     </div>
   );

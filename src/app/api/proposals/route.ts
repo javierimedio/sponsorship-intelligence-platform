@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/infrastructure/supabase/server-cli
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { SupabaseProposalRepository } from '@/infrastructure/supabase/proposal-repository';
 import { CreateProposalUseCase } from '@/application/use-cases/intake/create-proposal';
+import { asBrandId } from '@/domain/shared/ids';
 
 export async function POST(request: NextRequest) {
   const supabase = createSupabaseServerClient();
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const title = typeof body?.title === 'string' ? body.title.trim() : '';
+  const brandId = typeof body?.brandId === 'string' && body.brandId ? asBrandId(body.brandId) : null;
 
   if (!title) {
     return NextResponse.json({ error: 'El título es obligatorio.' }, { status: 400 });
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest) {
     const proposal = await useCase.execute({
       tenantId: profile.tenantId,
       organizationId: profile.organizationId,
+      brandId,
       title,
       createdBy: profile.userId,
     });

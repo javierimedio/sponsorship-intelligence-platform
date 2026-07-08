@@ -5,6 +5,7 @@ import { Proposal } from '../../../domain/intake/proposal';
 import { ProposalRepository } from '../../../domain/intake/repositories';
 import {
   asProposalId,
+  BrandId,
   OrganizationId,
   TenantId,
   UserId,
@@ -13,6 +14,7 @@ import {
 export interface CreateProposalInput {
   tenantId: TenantId;
   organizationId: OrganizationId;
+  brandId?: BrandId | null;
   title: string;
   createdBy: UserId | null;
 }
@@ -25,6 +27,7 @@ export class CreateProposalUseCase {
       id: asProposalId(randomUUID()),
       tenantId: input.tenantId,
       organizationId: input.organizationId,
+      brandId: input.brandId,
       title: input.title,
       createdBy: input.createdBy,
       createdAt: new Date(),

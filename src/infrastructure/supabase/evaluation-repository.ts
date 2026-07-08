@@ -67,6 +67,17 @@ export class SupabaseEvaluationResultRepository implements EvaluationResultRepos
   async saveOutcome(proposalId: ProposalId, outcome: EvaluationOutcome, source: 'ai' | 'manual'): Promise<void> {
     const base = { tenant_id: this.tenantId, organization_id: this.organizationId, proposal_id: proposalId };
 
+    // Reemplaza por completo el resultado anterior — necesario para que editar/reevaluar
+    // una propuesta no acumule filas duplicadas de intentos previos.
+    const [delScores, delRisks, delFinancials] = await Promise.all([
+      this.client.from('proposal_scores').delete().eq('proposal_id', proposalId),
+      this.client.from('proposal_risks').delete().eq('proposal_id', proposalId),
+      this.client.from('proposal_financials').delete().eq('proposal_id', proposalId),
+    ]);
+    if (delScores.error) throw delScores.error;
+    if (delRisks.error) throw delRisks.error;
+    if (delFinancials.error) throw delFinancials.error;
+
     if (outcome.scores.length) {
       const { error } = await this.client.from('proposal_scores').insert(
         outcome.scores.map((s) => ({

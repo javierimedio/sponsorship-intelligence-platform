@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AppShell } from '@/components/app-shell';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
+import { SubmitProposalButton } from './submit-button';
 
 interface PageProps {
   params: { id: string };
@@ -11,7 +12,11 @@ interface PageProps {
 export default async function ProposalDetailPage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
 
-  const { data: proposal } = await supabase.from('proposals').select('*').eq('id', params.id).maybeSingle();
+  const { data: proposal } = await supabase
+    .from('proposals')
+    .select('*, brands(name)')
+    .eq('id', params.id)
+    .maybeSingle();
 
   if (!proposal) {
     return (
@@ -78,10 +83,32 @@ export default async function ProposalDetailPage({ params }: PageProps) {
       <p>
         <Link href="/proposals">← Volver a propuestas</Link>
       </p>
-      <h1 style={{ marginBottom: 4 }}>{proposal.title}</h1>
-      <p style={{ color: 'var(--c-mid)', marginTop: 0, marginBottom: 24 }}>
-        Estado: <span className={`status s-${proposal.status}`}>{proposal.status}</span>
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ marginBottom: 4 }}>{proposal.title}</h1>
+          <p style={{ color: 'var(--c-mid)', margin: 0 }}>
+            {proposal.brands?.name ?? 'Corporativo (Gor Factory)'} · Estado:{' '}
+            <span className={`status s-${proposal.status}`}>{proposal.status}</span>{' '}
+            {proposal.submitted_at ? (
+              <span className="status s-evaluated" style={{ marginLeft: 6 }}>
+                Enviada el {new Date(proposal.submitted_at).toLocaleDateString('es-ES')}
+              </span>
+            ) : (
+              <span className="status s-extracting" style={{ marginLeft: 6 }}>
+                Borrador
+              </span>
+            )}
+          </p>
+        </div>
+        {!proposal.submitted_at && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href={`/proposals/${proposal.id}/edit`} className="btn btn-outline">
+              ✏️ Editar
+            </Link>
+            {proposal.recommendation && <SubmitProposalButton proposalId={proposal.id} />}
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <div className="card-title">Resultado de la evaluación</div>

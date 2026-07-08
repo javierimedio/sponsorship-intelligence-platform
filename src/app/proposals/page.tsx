@@ -25,7 +25,7 @@ export default async function ProposalsPage() {
 
   const { data: proposals, error } = await supabase
     .from('proposals')
-    .select('id, title, status, total_score, overall_risk_level, recommendation, created_at')
+    .select('id, title, status, total_score, overall_risk_level, recommendation, created_at, submitted_at, brands(name)')
     .order('created_at', { ascending: false });
 
   return (
@@ -52,6 +52,7 @@ export default async function ProposalsPage() {
             <thead>
               <tr>
                 <th>Título</th>
+                <th>Organización / Marca</th>
                 <th>Estado</th>
                 <th>Score</th>
                 <th>Riesgo</th>
@@ -61,13 +62,19 @@ export default async function ProposalsPage() {
               </tr>
             </thead>
             <tbody>
-              {proposals.map((p) => (
+              {proposals.map((p: any) => (
                 <tr key={p.id}>
                   <td>
                     <strong>{p.title}</strong>
                   </td>
+                  <td>{p.brands?.name ?? 'Corporativo'}</td>
                   <td>
-                    <span className={`status s-${p.status}`}>{p.status}</span>
+                    <span className={`status s-${p.status}`}>{p.status}</span>{' '}
+                    {p.submitted_at ? (
+                      <span className="status s-evaluated">Enviada</span>
+                    ) : (
+                      <span className="status s-extracting">Borrador</span>
+                    )}
                   </td>
                   <td>{p.total_score !== null ? `${(Number(p.total_score) * 100).toFixed(0)}%` : '—'}</td>
                   <td>{p.overall_risk_level ?? '—'}</td>
@@ -85,6 +92,12 @@ export default async function ProposalsPage() {
                   </td>
                   <td>
                     <Link href={`/proposals/${p.id}`}>Ver →</Link>
+                    {!p.submitted_at && (
+                      <>
+                        {' · '}
+                        <Link href={`/proposals/${p.id}/edit`}>Editar</Link>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

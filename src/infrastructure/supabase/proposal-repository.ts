@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Proposal, ProposalStatus } from '../../domain/intake/proposal';
 import { ProposalRepository } from '../../domain/intake/repositories';
 import {
+  asBrandId,
   asOrganizationId,
   asProposalId,
   asTenantId,
@@ -16,10 +17,12 @@ interface ProposalRow {
   id: string;
   tenant_id: string;
   organization_id: string;
+  brand_id: string | null;
   title: string;
   status: ProposalStatus;
   created_by: string | null;
   created_at: string;
+  submitted_at: string | null;
 }
 
 function toDomain(row: ProposalRow): Proposal {
@@ -27,10 +30,12 @@ function toDomain(row: ProposalRow): Proposal {
     id: asProposalId(row.id),
     tenantId: asTenantId(row.tenant_id),
     organizationId: asOrganizationId(row.organization_id),
+    brandId: row.brand_id ? asBrandId(row.brand_id) : null,
     title: row.title,
     status: row.status,
     createdBy: row.created_by ? asUserId(row.created_by) : null,
     createdAt: new Date(row.created_at),
+    submittedAt: row.submitted_at ? new Date(row.submitted_at) : null,
   });
 }
 
@@ -64,9 +69,11 @@ export class SupabaseProposalRepository implements ProposalRepository {
       id: proposal.id,
       tenant_id: proposal.tenantId,
       organization_id: proposal.organizationId,
+      brand_id: proposal.brandId,
       title: proposal.title,
       status: proposal.status,
       created_by: proposal.createdBy,
+      submitted_at: proposal.submittedAt ? proposal.submittedAt.toISOString() : null,
     });
 
     if (error) throw error;
