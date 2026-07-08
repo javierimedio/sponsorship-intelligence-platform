@@ -52,7 +52,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const [{ data: proposals }, { data: risks }, { data: financials }, { data: activationsInProgress }] = await Promise.all([
+  const [{ data: proposals }, { data: risks }, { data: financials }, { data: activationsInProgress }, { data: rejectedProposals }] = await Promise.all([
     supabase
       .from('proposals')
       .select('id, title, total_score, overall_risk_level, recommendation, submitted_at, approved_at, rejected_at, finalized_at, brand_id, brands(name)')
@@ -73,6 +73,11 @@ export default async function DashboardPage() {
       .in('status', ['pending', 'in_progress'])
       .eq('proposals.organization_id', profile.organizationId)
       .is('proposals.finalized_at', null),
+    supabase
+      .from('proposals')
+      .select('id, rejection_reason, proposal_financials(estimated_amount, economic_concepts(nature))')
+      .eq('organization_id', profile.organizationId)
+      .not('rejected_at', 'is', null),
   ]);
 
   const rows = (proposals ?? []) as unknown as ProposalRow[];
@@ -116,6 +121,19 @@ export default async function DashboardPage() {
   const scored = rows.filter((p) => p.total_score !== null);
   const avgScore = scored.length ? scored.reduce((sum, p) => sum + (p.total_score ?? 0), 0) / scored.length : null;
   const approvedCount = rows.filter((p) => p.approved_at).length;
+
+  // Oportunidad perdida: propuestas rechazadas, su valor económico solicitado y por qué.
+  const lostValue = (rejectedProposals ?? []).reduce((sum: number, p: any) => {
+    const cost = (p.proposal_financials ?? [])
+      .filter((f: any) => f.economic_concepts?.nature === 'cost' && f.estimated_amount !== null)
+      .reduce((s: number, f: any) => s + Number(f.estimated_amount), 0);
+    return sum + cost;
+  }, 0);
+  const reasonCounts = new Map<string, number>();
+  for (const p of (rejectedProposals ?? []) as any[]) {
+    const reason = p.rejection_reason?.trim() || 'Sin motivo especificado';
+    reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+  }
 
   // Pipeline: cuenta por etapa del Workspace adaptativo
   const pipelineCounts: Record<WorkspaceStage, number> = { draft: 0, evaluated: 0, rejected: 0, approved: 0, finalized: 0, archived: 0 };
@@ -278,6 +296,35 @@ export default async function DashboardPage() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* Oportunidad perdida — propuestas rechazadas, valor y motivo */}
+        <div className="card" style={{ flex: 1 }}>
+          <div className="card-title">Oportunidad perdida</div>
+          {!rejectedProposals?.length ? (
+            <EmptyState message="Ninguna propuesta rechazada todavía." />
+          ) : (
+            <>
+              <div className="stat-block" style={{ marginBottom: 10 }}>
+                <div>
+                  <div className="stat-label">Rechazadas</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{rejectedProposals.length}</div>
+                </div>
+                <div>
+                  <div className="stat-label">Valor solicitado</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{lostValue.toLocaleString('es-ES')} €</div>
+                </div>
+              </div>
+              <ul className="mini-list">
+                {[...reasonCounts.entries()].map(([reason, count]) => (
+                  <li key={reason}>
+                    <span>{reason}</span>
+                    <strong>{count}</strong>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </div>
