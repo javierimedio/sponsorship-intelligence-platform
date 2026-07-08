@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { ConfidenceRing } from '@/components/confidence-ring';
 import { ScoreBadge, RiskBadge, StatusPill } from '@/components/badges';
 import { EmptyState } from '@/components/empty-state';
+import { RejectDialog } from '@/components/reject-dialog';
 import { WorkspaceStage } from '@/lib/workspace-stage';
 
 export interface PipelineProposal {
@@ -81,6 +82,7 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
   const [responsibleFilter, setResponsibleFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>('list');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
 
   const brands = useMemo(() => Array.from(new Set(proposals.map((p) => p.brandName))).sort(), [proposals]);
   const responsibles = useMemo(
@@ -109,26 +111,34 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
       .sort(priorityCompare);
   }, [proposals, search, stageFilter, brandFilter, riskFilter, responsibleFilter, scoreFilter]);
 
-  async function runAction(id: string, action: 'approve' | 'reject' | 'request-review' | 'archive') {
+  async function runAction(id: string, action: 'approve' | 'request-review' | 'archive') {
     setBusyId(id);
     try {
-      let body: string | undefined;
-      if (action === 'reject') {
-        const reason = window.prompt('Motivo del rechazo (opcional):');
-        if (reason === null) {
-          setBusyId(null);
-          return;
-        }
-        body = JSON.stringify({ reason });
-      }
-      const res = await fetch(`/api/proposals/${id}/${action}`, {
-        method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body,
-      });
+      const res = await fetch(`/api/proposals/${id}/${action}`, { method: 'POST' });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(data.error ?? 'Error al actualizar la propuesta.');
+      router.refresh();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmReject(reason: string) {
+    if (!rejectTargetId) return;
+    setBusyId(rejectTargetId);
+    try {
+      const res = await fetch(`/api/proposals/${rejectTargetId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.error ?? 'Error al rechazar la propuesta.');
+      setRejectTargetId(null);
       router.refresh();
     } catch (err) {
       alert((err as Error).message);
@@ -258,7 +268,7 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
                       <button disabled={busyId === p.id} onClick={() => runAction(p.id, 'request-review')}>
                         Revisión
                       </button>
-                      <button disabled={busyId === p.id} onClick={() => runAction(p.id, 'reject')} style={{ color: 'var(--c-red)' }}>
+                      <button disabled={busyId === p.id} onClick={() => setRejectTargetId(p.id)} style={{ color: 'var(--c-red)' }}>
                         Rechazar
                       </button>
                     </>
@@ -274,6 +284,13 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
           })
         )}
       </div>
+
+      <RejectDialog
+        open={rejectTargetId !== null}
+        onCancel={() => setRejectTargetId(null)}
+        onConfirm={confirmReject}
+        loading={busyId === rejectTargetId}
+      />
     </div>
   );
 }
