@@ -20,6 +20,7 @@ import { computeGlobalRiskScore, getTone, getWorkspaceStage } from '@/lib/worksp
 import { generateExecutiveSummary, generateStrengthsAndWeaknesses } from '@/lib/executive-summary';
 import { LifecycleActions } from './lifecycle-actions';
 import { ActivationFollowUp } from './activation-followup';
+import { NegotiationAssistant } from '@/components/negotiation-assistant';
 
 interface PageProps {
   params: { id: string };
@@ -72,7 +73,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .order('created_at', { ascending: false }),
     supabase
       .from('proposal_scores')
-      .select('score_value, ai_rationale, source, scoring_attributes(name, max_score, scoring_blocks(name))')
+      .select('scoring_attribute_id, score_value, ai_rationale, source, scoring_attributes(name, max_score, scoring_blocks(name))')
       .eq('proposal_id', params.id),
     supabase
       .from('proposal_risks')
@@ -302,6 +303,14 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           </>
         )}
       </div>
+
+      {proposal.total_score !== null && (
+        <NegotiationAssistant
+          proposalId={proposal.id}
+          totalScore={proposal.total_score}
+          currentScores={(scores ?? []).map((s: any) => ({ attributeId: s.scoring_attribute_id, scoreValue: Number(s.score_value) }))}
+        />
+      )}
 
       {/* ── MATRIZ DE RIESGO ── */}
       <div className="card">
