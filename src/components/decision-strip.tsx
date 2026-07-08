@@ -1,20 +1,21 @@
 // src/components/decision-strip.tsx
-// El componente que hace tangible el concepto "adaptativo" (Documento 6, §5): una sola
-// franja, siempre en el mismo sitio, que cambia de contenido según el estado — nunca de
-// posición ni de forma. Server Component: solo texto + un enlace, sin interactividad.
+// Enriquecido: Score + Riesgo + ROI + Estado + Recomendación, y los 4 botones de acción.
+// Sigue siendo EL componente adaptativo — mismo sitio, mismo tamaño, contenido según estado.
+// Los botones llaman a las rutas de ciclo de vida ya existentes (o las nuevas de esta ronda).
+'use client';
 
-import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Tone, WorkspaceStage } from '@/lib/workspace-stage';
 
 interface DecisionStripProps {
+  proposalId: string;
   stage: WorkspaceStage;
   tone: Tone;
-  proposalId: string;
   totalScore: number | null;
   overallRiskLevel: string | null;
+  roi: number | null;
   recommendation: string | null;
-  pendingActivationsCount: number;
-  missingFieldsCount: number;
 }
 
 const TONE_STYLE: Record<Tone, { bg: string; fg: string }> = {
@@ -24,63 +25,97 @@ const TONE_STYLE: Record<Tone, { bg: string; fg: string }> = {
   neutral: { bg: 'var(--c-light)', fg: 'var(--c-mid)' },
 };
 
-export function DecisionStrip(props: DecisionStripProps) {
-  const { stage, tone, proposalId } = props;
+const STAGE_LABEL: Record<WorkspaceStage, string> = {
+  draft: 'Borrador',
+  evaluated: 'Evaluada',
+  rejected: 'Rechazada',
+  approved: 'Aprobada',
+  finalized: 'Finalizada',
+};
+
+export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRiskLevel, roi, recommendation }: DecisionStripProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { bg, fg } = TONE_STYLE[tone];
 
-  let icon = '•';
-  let text = '';
-  let action: { href: string; label: string } | null = null;
-
-  if (stage === 'draft') {
-    icon = '⚠';
-    text =
-      props.missingFieldsCount > 0
-        ? `Faltan ${props.missingFieldsCount} campo(s) para poder evaluar esta propuesta.`
-        : 'Lista para evaluar — completa la extracción y la evaluación.';
-    action = { href: `/proposals/${proposalId}/edit`, label: 'Completar →' };
-  } else if (stage === 'evaluated') {
-    icon = tone === 'positive' ? '✓' : tone === 'negative' ? '✗' : '~';
-    const pct = props.totalScore !== null ? Math.round(props.totalScore * 100) : null;
-    text = `${props.recommendation ?? 'Sin recomendación'} — score ${pct ?? '—'}%, riesgo ${props.overallRiskLevel ?? '—'}.`;
-    action = { href: `/proposals/${proposalId}/edit`, label: 'Editar →' };
-  } else if (stage === 'approved') {
-    icon = '▶';
-    text =
-      props.pendingActivationsCount > 0
-        ? `${props.pendingActivationsCount} activación(es) pendiente(s) de ejecutar.`
-        : 'Sin activaciones pendientes — todo ejecutado.';
-    action = null;
-  } else {
-    icon = '★';
-    const pct = props.totalScore !== null ? Math.round(props.totalScore * 100) : null;
-    text = `Colaboración finalizada. Score de evaluación: ${pct ?? '—'}%.`;
-    action = null;
+  async function run(action: 'approve' | 'reject' | 'request-review', label: string) {
+    setLoading(label);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/${action}`, { method: 'POST' });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.error ?? 'Error al actualizar la propuesta.');
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(null);
+    }
   }
 
+  const canDecide = stage === 'evaluated'; // solo se puede aprobar/rechazar/pedir revisión estando Evaluada
+
   return (
-    <div
-      className={`decision-strip decision-strip-sticky`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '.85rem 1.25rem',
-        borderRadius: 'var(--radius)',
-        marginBottom: '1.5rem',
-        background: bg,
-        color: fg,
-      }}
-    >
-      <span style={{ fontSize: 14, fontWeight: 600 }}>
-        {icon} {text}
-      </span>
-      {action && (
-        <Link href={action.href} style={{ color: fg, fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
-          {action.label}
-        </Link>
-      )}
+    <div className="decision-strip decision-strip-sticky" style={{ background: bg, color: fg, padding: '.85rem 1.25rem', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <Metric label="Score" value={totalScore !== null ? `${Math.round(totalScore * 100)}%` : '—'} />
+          <Metric label="Riesgo" value={overallRiskLevel ?? '—'} />
+          <Metric label="ROI" value={roi !== null ? `${roi.toFixed(1)}x` : '—'} />
+          <Metric label="Estado" value={STAGE_LABEL[stage]} />
+          <Metric label="Recomendación" value={recommendation ?? '—'} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => router.refresh()}
+            className="btn btn-outline"
+            style={{ padding: '.4rem .8rem', fontSize: 12 }}
+          >
+            Guardar
+          </button>
+          {canDecide && (
+            <>
+              <button
+                onClick={() => run('request-review', 'review')}
+                disabled={loading !== null}
+                className="btn btn-outline"
+                style={{ padding: '.4rem .8rem', fontSize: 12 }}
+              >
+                {loading === 'review' ? '...' : 'Solicitar revisión'}
+              </button>
+              <button
+                onClick={() => run('reject', 'reject')}
+                disabled={loading !== null}
+                className="btn btn-outline"
+                style={{ padding: '.4rem .8rem', fontSize: 12, color: 'var(--c-red)', borderColor: 'var(--c-red)' }}
+              >
+                {loading === 'reject' ? '...' : 'Rechazar'}
+              </button>
+              <button
+                onClick={() => run('approve', 'approve')}
+                disabled={loading !== null}
+                className="btn btn-amber"
+                style={{ padding: '.4rem .8rem', fontSize: 12 }}
+              >
+                {loading === 'approve' ? '...' : 'Aprobar'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {error && <p style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{error}</p>}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', opacity: 0.7 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700 }}>{value}</div>
     </div>
   );
 }
