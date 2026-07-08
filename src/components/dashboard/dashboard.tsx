@@ -1,51 +1,114 @@
-import DashboardOverview from "./dashboard-overview";
-import PendingProposals from "./pending-proposals";
-
 export default function Dashboard() {
   return (
-    <>
-
-      <DashboardOverview />
-
-      <div
-        className="page-container"
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        padding: 24,
+      }}
+    >
+      <h1
         style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 24,
+          fontSize: 34,
+          fontWeight: 700,
+          margin: 0,
         }}
       >
+        Sponsorship Intelligence
+      </h1>
 
-        <div className="surface" style={{ minHeight: 420 }}>
+      <p
+        style={{
+          color: "#6B7280",
+          marginTop: -10,
+        }}
+      >
+        Executive Dashboard
+      </p>
 
-          <div style={{ padding: 24 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4,minmax(180px,1fr))",
+          gap: 20,
+        }}
+      >
+        <DashboardCard
+          title="Propuestas"
+          value="28"
+        />
 
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                marginBottom: 12,
-              }}
-            >
-              Pipeline de colaboraciones
-            </h2>
+        <DashboardCard
+          title="Pendientes"
+          value="6"
+        />
 
-            <p
-              style={{
-                color: "#6B7280",
-              }}
-            >
-              Timeline y pipeline llegarán en el Commit 001.4
-            </p>
+        <DashboardCard
+          title="Inversión"
+          value="94.500 €"
+        />
 
-          </div>
+        <DashboardCard
+          title="ROI"
+          value="3,6x"
+        />
+      </div>
 
-        </div>
+      <div
+        style={{
+          background: "white",
+          borderRadius: 12,
+          border: "1px solid #E5E7EB",
+          padding: 24,
+        }}
+      >
+        <h2>Bienvenido 👋</h2>
 
-        <PendingProposals />
+        <p>
+          Este Dashboard irá evolucionando durante los próximos commits.
+        </p>
 
       </div>
 
-    </>
+    </div>
+  );
+}
+
+function DashboardCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: 20,
+        border: "1px solid #E5E7EB",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          color: "#6B7280",
+          marginBottom: 8,
+        }}
+      >
+        {title}
+      </div>
+
+      <div
+        style={{
+          fontSize: 30,
+          fontWeight: 700,
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
