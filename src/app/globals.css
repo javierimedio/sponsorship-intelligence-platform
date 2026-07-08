@@ -453,3 +453,86 @@ details.level-2 .level-2-body {
 .timeline-body {
   padding-top: 2px;
 }
+
+/* ── FASE 3: PIPELINE DE DECISIONES ── */
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.filter-bar select, .filter-bar input[type=text] {
+  width: auto;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.view-selector {
+  display: flex;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.view-selector button {
+  border: none;
+  background: white;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--c-mid);
+}
+.view-selector button.active {
+  background: var(--c-dark);
+  color: white;
+}
+.view-selector button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.avatar-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--c-light);
+  color: var(--c-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pipeline-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--c-line);
+  background: white;
+}
+.pipeline-card:last-child {
+  border-bottom: none;
+}
+.pipeline-card:hover {
+  background: #FAFAF8;
+}
+.pipeline-card-quick-actions {
+  display: flex;
+  gap: 4px;
+}
+.pipeline-card-quick-actions button {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--c-line);
+  background: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pipeline-card-quick-actions button:hover {
+  background: var(--c-light);
+}
