@@ -30,7 +30,9 @@ export class SaveManualExtractionUseCase {
 
     const proposal = await this.proposalRepository.findById(input.proposalId);
     if (proposal) {
-      await this.proposalRepository.save(proposal.markExtracted());
+      const requesterOrg =
+        typeof input.extractedJson.requester_org === 'string' ? input.extractedJson.requester_org : undefined;
+      await this.proposalRepository.save(proposal.markExtracted(requesterOrg));
     }
   }
 }

@@ -10,6 +10,7 @@ export class Proposal {
     public readonly tenantId: TenantId,
     public readonly organizationId: OrganizationId,
     public readonly brandId: BrandId | null,
+    public readonly partnerName: string | null,
     public readonly title: string,
     public readonly status: ProposalStatus,
     public readonly createdBy: UserId | null,
@@ -34,6 +35,7 @@ export class Proposal {
       params.tenantId,
       params.organizationId,
       params.brandId ?? null,
+      null,
       params.title,
       'received',
       params.createdBy,
@@ -48,6 +50,7 @@ export class Proposal {
     tenantId: TenantId;
     organizationId: OrganizationId;
     brandId: BrandId | null;
+    partnerName: string | null;
     title: string;
     status: ProposalStatus;
     createdBy: UserId | null;
@@ -59,6 +62,7 @@ export class Proposal {
       params.tenantId,
       params.organizationId,
       params.brandId,
+      params.partnerName,
       params.title,
       params.status,
       params.createdBy,
@@ -71,12 +75,14 @@ export class Proposal {
     return this.submittedAt === null;
   }
 
-  markExtracted(): Proposal {
+  /** partnerName es opcional: si se pasa undefined, se conserva el que ya hubiera. */
+  markExtracted(partnerName?: string | null): Proposal {
     return new Proposal(
       this.id,
       this.tenantId,
       this.organizationId,
       this.brandId,
+      partnerName !== undefined ? partnerName : this.partnerName,
       this.title,
       'extracted',
       this.createdBy,

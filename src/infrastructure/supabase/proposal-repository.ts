@@ -18,6 +18,7 @@ interface ProposalRow {
   tenant_id: string;
   organization_id: string;
   brand_id: string | null;
+  partner_name: string | null;
   title: string;
   status: ProposalStatus;
   created_by: string | null;
@@ -31,6 +32,7 @@ function toDomain(row: ProposalRow): Proposal {
     tenantId: asTenantId(row.tenant_id),
     organizationId: asOrganizationId(row.organization_id),
     brandId: row.brand_id ? asBrandId(row.brand_id) : null,
+    partnerName: row.partner_name,
     title: row.title,
     status: row.status,
     createdBy: row.created_by ? asUserId(row.created_by) : null,
@@ -43,12 +45,7 @@ export class SupabaseProposalRepository implements ProposalRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async findById(id: ProposalId): Promise<Proposal | null> {
-    const { data, error } = await this.client
-      .from('proposals')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
+    const { data, error } = await this.client.from('proposals').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return data ? toDomain(data) : null;
   }
@@ -59,7 +56,6 @@ export class SupabaseProposalRepository implements ProposalRepository {
       .select('*')
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
-
     if (error) throw error;
     return (data ?? []).map(toDomain);
   }
@@ -70,12 +66,12 @@ export class SupabaseProposalRepository implements ProposalRepository {
       tenant_id: proposal.tenantId,
       organization_id: proposal.organizationId,
       brand_id: proposal.brandId,
+      partner_name: proposal.partnerName,
       title: proposal.title,
       status: proposal.status,
       created_by: proposal.createdBy,
       submitted_at: proposal.submittedAt ? proposal.submittedAt.toISOString() : null,
     });
-
     if (error) throw error;
   }
 }

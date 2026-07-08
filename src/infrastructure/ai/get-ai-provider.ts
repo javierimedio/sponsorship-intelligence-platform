@@ -1,14 +1,15 @@
 // src/infrastructure/ai/get-ai-provider.ts
-// Único punto de decisión sobre qué proveedor de IA se usa. Cambiar entre Gemini, Claude
-// u OpenAI es cambiar la variable de entorno AI_PROVIDER — nada de código.
+// Único punto de decisión sobre qué proveedor de IA se usa. AI_PROVIDER (variable de
+// entorno) es el valor POR DEFECTO del servidor, pero cada llamada puede pedir
+// explícitamente un proveedor distinto — es lo que permite el selector en /intake.
 
 import { AIProvider } from '../../domain/shared/ai-provider';
 import { AnthropicProvider } from './anthropic-provider';
 import { GeminiProvider } from './gemini-provider';
 import { OpenAiProvider } from './openai-provider';
 
-export function getAIProvider(): AIProvider {
-  const provider = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase();
+export function getAIProvider(providerOverride?: string): AIProvider {
+  const provider = (providerOverride ?? process.env.AI_PROVIDER ?? 'gemini').toLowerCase();
 
   if (provider === 'manual') {
     throw new Error(
@@ -26,7 +27,5 @@ export function getAIProvider(): AIProvider {
     return new OpenAiProvider();
   }
 
-  // 'gemini' es el valor por defecto — pero recuerda que su capa gratuita no está
-  // disponible en España, así que probablemente necesites cambiar esto a 'openai'.
   return new GeminiProvider();
 }

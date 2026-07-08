@@ -9,7 +9,7 @@ import { IntakeForm } from './intake-form';
 export default async function IntakePage() {
   const supabase = createSupabaseServerClient();
   const profile = await getCurrentProfile(supabase);
-  const manualMode = (process.env.AI_PROVIDER ?? '').toLowerCase() === 'manual';
+  const defaultProvider = (process.env.AI_PROVIDER ?? 'manual').toLowerCase();
 
   if (!profile) {
     return (
@@ -24,22 +24,13 @@ export default async function IntakePage() {
   return (
     <AppShell>
       <h1>Nueva propuesta</h1>
-      {manualMode ? (
-        <p style={{ color: 'var(--c-mid)' }}>
-          <strong>Modo manual activo</strong> (AI_PROVIDER=manual): tú introduces los mismos datos
-          que rellenaría un Agente de IA. El motor de scoring/riesgo/recomendación es idéntico —
-          solo cambia de dónde vienen los números de entrada. Se guarda como{' '}
-          <code>source=&quot;manual&quot;</code>.
-        </p>
-      ) : (
-        <p style={{ color: 'var(--c-mid)' }}>
-          Crea una propuesta, sube un documento y el sistema encadena automáticamente:
-          Agente 1 (extracción) → Agentes 2/3/5 (scoring, riesgo y financials, en paralelo) →
-          recomendación determinista.
-        </p>
-      )}
+      <p style={{ color: 'var(--c-mid)' }}>
+        Crea una propuesta, sube un documento y elige cómo quieres extraer su información —
+        a mano, o con un proveedor de IA configurado. La propuesta queda en{' '}
+        <strong>Borrador</strong> hasta que la envíes explícitamente.
+      </p>
       <div className="card">
-        <IntakeForm organizationId={profile.organizationId} manualMode={manualMode} />
+        <IntakeForm organizationId={profile.organizationId} defaultProvider={defaultProvider} />
       </div>
     </AppShell>
   );

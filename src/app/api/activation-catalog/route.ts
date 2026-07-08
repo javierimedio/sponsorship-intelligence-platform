@@ -15,8 +15,12 @@ export async function GET() {
 
   try {
     const repository = new SupabaseActivationCatalogRepository(supabase);
-    const catalog = await repository.getCatalog(profile.organizationId);
-    return NextResponse.json(catalog);
+    const [items, channels, kpiDefinitions] = await Promise.all([
+      repository.getCatalogItems(profile.organizationId),
+      repository.getChannels(profile.organizationId),
+      repository.getKpiDefinitions(profile.organizationId),
+    ]);
+    return NextResponse.json({ items, channels, kpiDefinitions });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

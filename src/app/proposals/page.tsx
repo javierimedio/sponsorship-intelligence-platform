@@ -1,9 +1,14 @@
 // src/app/proposals/page.tsx
+// Listado rediseñado (Documento 6 + petición explícita de Fase A): filas, no tabla densa.
+// ConfidenceRing + badges dan toda la información de un vistazo, sin abrir nada.
 
 import Link from 'next/link';
 import { AppShell } from '@/components/app-shell';
+import { ConfidenceRing } from '@/components/confidence-ring';
+import { ScoreBadge, RiskBadge, StatusPill } from '@/components/badges';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
+import { getWorkspaceStage } from '@/lib/workspace-stage';
 
 const RECOMMENDATION_COLOR: Record<string, string> = {
   Recomendable: 'var(--c-green)',
@@ -25,7 +30,10 @@ export default async function ProposalsPage() {
 
   const { data: proposals, error } = await supabase
     .from('proposals')
-    .select('id, title, status, total_score, overall_risk_level, recommendation, created_at, submitted_at, brands(name)')
+    .select(
+      'id, title, total_score, overall_risk_level, recommendation, created_at, submitted_at, ' +
+        'approved_at, finalized_at, partner_name, brands(name)',
+    )
     .order('created_at', { ascending: false });
 
   return (
@@ -48,61 +56,38 @@ export default async function ProposalsPage() {
             </p>
           </div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Título</th>
-                <th>Organización / Marca</th>
-                <th>Estado</th>
-                <th>Score</th>
-                <th>Riesgo</th>
-                <th>Recomendación</th>
-                <th>Creada</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {proposals.map((p: any) => (
-                <tr key={p.id}>
-                  <td>
-                    <strong>{p.title}</strong>
-                  </td>
-                  <td>{p.brands?.name ?? 'Corporativo'}</td>
-                  <td>
-                    <span className={`status s-${p.status}`}>{p.status}</span>{' '}
-                    {p.submitted_at ? (
-                      <span className="status s-evaluated">Enviada</span>
-                    ) : (
-                      <span className="status s-extracting">Borrador</span>
-                    )}
-                  </td>
-                  <td>{p.total_score !== null ? `${(Number(p.total_score) * 100).toFixed(0)}%` : '—'}</td>
-                  <td>{p.overall_risk_level ?? '—'}</td>
-                  <td>
-                    {p.recommendation ? (
-                      <span style={{ color: RECOMMENDATION_COLOR[p.recommendation] ?? 'inherit', fontWeight: 700 }}>
-                        {p.recommendation}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td style={{ color: 'var(--c-mid)', fontSize: 12 }}>
+          <div>
+            {proposals.map((p: any) => (
+              <Link key={p.id} href={`/proposals/${p.id}`} className="proposal-row">
+                <ConfidenceRing totalScore={p.total_score} overallRiskLevel={p.overall_risk_level} size="sm" />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="proposal-title">{p.title}</div>
+                  <div className="proposal-meta">
+                    {p.brands?.name ?? 'Corporativo'}
+                    {p.partner_name ? ` · ${p.partner_name}` : ''} ·{' '}
                     {new Date(p.created_at).toLocaleDateString('es-ES')}
-                  </td>
-                  <td>
-                    <Link href={`/proposals/${p.id}`}>Ver →</Link>
-                    {!p.submitted_at && (
-                      <>
-                        {' · '}
-                        <Link href={`/proposals/${p.id}/edit`}>Editar</Link>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+
+                <ScoreBadge totalScore={p.total_score} />
+                <RiskBadge level={p.overall_risk_level} />
+                <StatusPill stage={getWorkspaceStage(p)} />
+
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: p.recommendation ? RECOMMENDATION_COLOR[p.recommendation] ?? 'inherit' : 'var(--c-mid)',
+                    minWidth: 110,
+                    textAlign: 'right',
+                  }}
+                >
+                  {p.recommendation ?? '—'}
+                </span>
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </AppShell>

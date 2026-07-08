@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const proposalId = typeof body?.proposalId === 'string' ? body.proposalId : '';
+  const provider = typeof body?.provider === 'string' ? body.provider : undefined;
 
   if (!proposalId) {
     return NextResponse.json({ error: 'proposalId es obligatorio.' }, { status: 400 });
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   const useCase = new EvaluateProposalUseCase(
     new SupabaseEvaluationCatalogRepository(supabase),
     new SupabaseEvaluationResultRepository(supabase, profile.tenantId, profile.organizationId),
-    getAIProvider(),
+    getAIProvider(provider),
   );
 
   try {

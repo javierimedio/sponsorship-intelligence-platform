@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
   const proposalId = typeof body?.proposalId === 'string' ? body.proposalId : '';
   const documentId = typeof body?.documentId === 'string' ? body.documentId : '';
   const storagePath = typeof body?.storagePath === 'string' ? body.storagePath : '';
+  const provider = typeof body?.provider === 'string' ? body.provider : undefined;
 
   if (!proposalId || !storagePath) {
     return NextResponse.json({ error: 'proposalId y storagePath son obligatorios.' }, { status: 400 });
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
   const useCase = new RunExtractionAgentUseCase(
     new SupabaseAiExtractionRepository(supabase),
     new SupabaseProposalRepository(supabase),
-    getAIProvider(),
+    getAIProvider(provider),
   );
 
   try {

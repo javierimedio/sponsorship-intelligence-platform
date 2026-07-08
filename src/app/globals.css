@@ -279,28 +279,129 @@ tr:hover td {
   font-weight: 700;
   margin-top: 2px;
 }
-.page-container{
-    max-width:1600px;
-    margin:auto;
-    padding:32px;
+
+/* ── FASE A: WORKSPACE ADAPTATIVO (Documento 6) ── */
+
+/* Tinte exclusivo para contenido redactado/interpretado por IA — nunca se usa para nada más. */
+.ai-tint {
+  background: #F5F3FA;
+  border-left: 3px solid #8B7FD1;
+  padding: 1rem;
+  border-radius: var(--radius);
 }
 
-.cards-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-    gap:24px;
+/* Dashboard: KPI cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi-card {
+  background: var(--c-white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+.kpi-card .kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.kpi-card .kpi-label {
+  font-size: 12px;
+  color: var(--c-mid);
+  margin-top: 4px;
 }
 
-.section-title{
-    font-size:28px;
-    font-weight:700;
-    margin-bottom:24px;
-    color:#111827;
+/* Dashboard: pipeline / embudo */
+.pipeline {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+.pipeline-stage {
+  flex: 1;
+  text-align: center;
+  padding: .85rem .5rem;
+  border-radius: var(--radius);
+  background: var(--c-light);
+}
+.pipeline-stage .pipeline-count {
+  font-size: 22px;
+  font-weight: 700;
+}
+.pipeline-stage .pipeline-label {
+  font-size: 11px;
+  color: var(--c-mid);
+  text-transform: uppercase;
+  letter-spacing: .04em;
 }
 
-.surface{
-    background:white;
-    border-radius:12px;
-    border:1px solid #E5E7EB;
-    box-shadow:0 2px 10px rgba(0,0,0,.04);
+/* Workspace: Nivel 2 — acordeones nativos (sin JS extra) */
+details.level-2 {
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+details.level-2 > summary {
+  cursor: pointer;
+  padding: .75rem 1rem;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--c-light);
+  list-style: none;
+}
+details.level-2 > summary::-webkit-details-marker {
+  display: none;
+}
+details.level-2[open] > summary {
+  border-bottom: 1px solid var(--c-line);
+}
+details.level-2 .level-2-body {
+  padding: 1rem;
+}
+
+/* Workspace: lista compacta de "próximas acciones" (Aprobada) */
+.mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.mini-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-line);
+}
+.mini-list li:last-child {
+  border-bottom: none;
+}
+
+/* Listado tipo Linear/Notion: fila con anillo + badges, sin cuadrícula pesada */
+.proposal-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--c-line);
+  text-decoration: none;
+  color: inherit;
+}
+.proposal-row:hover {
+  background: #FAFAF8;
+  text-decoration: none;
+}
+.proposal-row:last-child {
+  border-bottom: none;
+}
+.proposal-row .proposal-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.proposal-row .proposal-meta {
+  font-size: 12px;
+  color: var(--c-mid);
 }

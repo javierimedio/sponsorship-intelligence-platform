@@ -1,18 +1,24 @@
 // src/domain/activation/repositories.ts
 
-import { ActivationCatalogItem } from './types';
+import {
+  ActivationAction,
+  ActivationActionInput,
+  ActivationCatalogItem,
+  ActivationFollowUpInput,
+  ChannelItem,
+  KpiDefinitionItem,
+} from './types';
 import { OrganizationId, ProposalId } from '../shared/ids';
 
 export interface ActivationCatalogRepository {
-  getCatalog(organizationId: OrganizationId): Promise<ActivationCatalogItem[]>;
+  getCatalogItems(organizationId: OrganizationId): Promise<ActivationCatalogItem[]>;
+  getChannels(organizationId: OrganizationId): Promise<ChannelItem[]>;
+  getKpiDefinitions(organizationId: OrganizationId): Promise<KpiDefinitionItem[]>;
 }
 
 export interface ActivationResultRepository {
-  /** Sustituye la selección anterior de esta propuesta por la nueva (no hace diffs). */
-  saveSelection(
-    proposalId: ProposalId,
-    activationCatalogItemIds: string[],
-    notes: string,
-    source: 'ai' | 'manual',
-  ): Promise<void>;
+  addAction(proposalId: ProposalId, input: ActivationActionInput, source: 'ai' | 'manual'): Promise<ActivationAction>;
+  listActions(proposalId: ProposalId): Promise<ActivationAction[]>;
+  updateFollowUp(actionId: string, input: ActivationFollowUpInput): Promise<void>;
+  deleteAction(actionId: string): Promise<void>;
 }

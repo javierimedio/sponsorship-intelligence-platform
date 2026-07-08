@@ -39,7 +39,15 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
    supabase/migrations/0011_ai_extractions.sql
    supabase/migrations/0012_evaluation_catalog.sql
    supabase/migrations/0013_evaluation_results.sql
+   supabase/migrations/0014_activation.sql
+   supabase/migrations/0015_economic_concepts_block_type.sql
+   supabase/migrations/0016_proposal_brand_and_submission.sql
+   supabase/migrations/0017_evaluation_results_delete_policy.sql
+   supabase/migrations/0018_activation_actions_rich.sql
+   supabase/migrations/0019_profiles_email.sql
    ```
+   Después de 0019, ejecuta el backfill que indica su comentario si ya tenías usuarios creados
+   antes de esa migración (rellena `profiles.email` para los que se crearon a mano por SQL).
 3. En el dashboard de Supabase: **Authentication → Hooks → Custom Access Token Hook** → apuntar a `public.custom_access_token_hook` (no se puede activar por SQL).
 4. (Opcional, solo en el proyecto de desarrollo) cargar los seeds — son datos ficticios, nunca reales:
    - `supabase/migrations/seed_dev_tenancy.sql`
@@ -74,6 +82,40 @@ Regla de dependencia: `domain` no importa nada de `application` ni `infrastructu
 - No hay Global Confidence Score, `human_feedback`, ni Knowledge Engine — quedan para cuando haya histórico real que aprovechar.
 - El proveedor de IA por defecto es **`manual`** — tras comprobar que Gemini (bloqueado por región en España/UE) y OpenAI (cuenta de API nueva sin saldo) no funcionaban sin activar facturación en algún sitio, se construyó un tercer camino que no depende de ningún proveedor: en `/intake`, cuando `AI_PROVIDER=manual`, el usuario rellena directamente los mismos datos que rellenaría un Agente (extracción, scoring, riesgo, financials) en formularios, y `buildEvaluationOutcome()` calcula el resultado exactamente igual que con IA — la única diferencia registrada es `source='manual'` en `proposal_scores`/`proposal_risks`/`proposal_financials`. Esto permite validar TODO el resto de la plataforma (RLS, Storage, catálogo, matriz de riesgo, recomendación) sin depender de que nadie apruebe un gasto. El puerto `AIProvider` es idéntico para Claude/Gemini/OpenAI; cambiar entre ellos (o al modo manual) es solo la variable de entorno `AI_PROVIDER`.
 - Limitación conocida del adapter de OpenAI: no acepta PDF directamente por la API de Chat Completions — solo imágenes (PNG/JPG) — para PDF con OpenAI haría falta conectar su Files API (pendiente).
+
+## Estado actual — ronda de mejoras tras el primer uso real
+
+- **Borrador / Enviada**: toda propuesta nace editable. `/proposals/[id]/edit` permite rehacer
+  extracción, evaluación y activación cuantas veces haga falta. Solo al pulsar "Enviar" (que
+  exige recomendación calculada) queda bloqueada — ver `submitted_at` en `proposals`.
+- **Multi-marca**: cada propuesta se asigna a "Corporativo" o a una marca (`brands`: Roly,
+  Roly WRK, Stamina, Musai, todas bajo la misma organización — no son organizaciones
+  independientes, ver nota en "Organización vs. Marca" más abajo).
+- **Selector de proveedor de IA por propuesta**: `AI_PROVIDER` en Vercel sigue siendo el valor
+  por defecto, pero `/intake` deja elegir explícitamente Manual/OpenAI/Gemini/Claude en cada
+  creación (`/api/ai-providers` informa cuáles tienen clave configurada). El modo edición
+  siempre usa revisión manual, independientemente del proveedor original.
+- **Plan de activación rico**: cada acción es una fila independiente (se puede repetir la
+  misma acción del catálogo varias veces), con canal, prioridad, impacto, esfuerzo,
+  responsable, fechas, KPI objetivo — y **seguimiento post-ejecución** (estado + resultado de
+  KPI) editable desde la ficha de la propuesta sin necesidad de volver a "editar" el borrador.
+- **Administración de usuarios**: un perfil con `role='org_admin'` ve la pestaña "Usuarios" y
+  puede crear cuentas nuevas (email + contraseña temporal + nombre) desde `/users`. Usa la
+  `SUPABASE_SERVICE_ROLE_KEY` — la única vía por diseño para crear un perfil, ya que `profiles`
+  no tiene política de INSERT para usuarios normales.
+
+### Organización vs. Marca — para no confundirlas
+
+- **Organization** (`organizations`): el nivel de aislamiento de negocio real (RLS). Tu usuario
+  pertenece a una sola. El widget "Organizaciones visibles" que había en la home al principio
+  era solo un test de RLS de cuando montamos Auth — ya no existe, se sustituyó por un resumen
+  de propuestas y las marcas de tu organización.
+- **Brand** (`brands`): una subdivisión *dentro* de tu organización (Roly, Roly WRK, Stamina,
+  Musai). Es lo que eliges al crear una propuesta. Si el día de mañana Musai necesitase ser una
+  Organización completa e independiente (con su propio aislamiento de datos), es un cambio de
+  modelo mayor — hoy está modelada como marca, no como organización, y funciona bien para
+  "a qué marca pertenece esta propuesta", pero no para "usuarios de Musai que no deban ver
+  datos de Gor Factory".
 
 ## Siguiente paso de desarrollo
 

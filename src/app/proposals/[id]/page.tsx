@@ -1,22 +1,37 @@
 // src/app/proposals/[id]/page.tsx
+// El Workspace adaptativo (Documento 6) — sustituye la antigua "ficha" plana de cards.
+// Header + ConfidenceRing + DecisionStrip + Nivel 1 (cambia según el estado) + Nivel 2
+// (acordeones, detalle técnico) + panel derecho (IA + documentos). Reutiliza el motor de
+// datos existente sin tocarlo — esto es 100% reorganización de presentación.
 
 import Link from 'next/link';
+import { revalidatePath } from 'next/cache';
 import { AppShell } from '@/components/app-shell';
+import { ConfidenceRing } from '@/components/confidence-ring';
+import { ScoreBadge, RiskBadge, StatusPill } from '@/components/badges';
+import { DecisionStrip } from '@/components/decision-strip';
+import { AIInsightPanel } from '@/components/ai-insight-panel';
+import { InlineEditable } from '@/components/inline-editable';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
-import { SubmitProposalButton } from './submit-button';
+import { getTone, getWorkspaceStage } from '@/lib/workspace-stage';
+import { LifecycleActions } from './lifecycle-actions';
+import { ActivationFollowUp } from './activation-followup';
 
 interface PageProps {
   params: { id: string };
 }
 
-export default async function ProposalDetailPage({ params }: PageProps) {
+const REQUIRED_EXTRACTION_FIELDS: { key: string; label: string }[] = [
+  { key: 'requester_name', label: 'Solicitante' },
+  { key: 'requester_org', label: 'Organización solicitante' },
+  { key: 'collaboration_type', label: 'Tipo de colaboración' },
+  { key: 'estimated_total_amount', label: 'Importe estimado' },
+];
+
+export default async function ProposalWorkspacePage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
 
-  const { data: proposal } = await supabase
-    .from('proposals')
-    .select('*, brands(name)')
-    .eq('id', params.id)
-    .maybeSingle();
+  const { data: proposal } = await supabase.from('proposals').select('*, brands(name)').eq('id', params.id).maybeSingle();
 
   if (!proposal) {
     return (
@@ -28,16 +43,17 @@ export default async function ProposalDetailPage({ params }: PageProps) {
   }
 
   const [
+    { data: documents },
     { data: extraction },
     { data: scores },
     { data: risks },
     { data: financials },
-    { data: documents },
     { data: activations },
   ] = await Promise.all([
+    supabase.from('documents').select('id, original_filename, storage_path, uploaded_at').eq('proposal_id', params.id),
     supabase
       .from('ai_extractions')
-      .select('extracted_json, model_used, created_at')
+      .select('extracted_json, model_used')
       .eq('proposal_id', params.id)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -55,18 +71,15 @@ export default async function ProposalDetailPage({ params }: PageProps) {
       .select('estimated_amount, source, economic_concepts(name, nature, block_type)')
       .eq('proposal_id', params.id),
     supabase
-      .from('documents')
-      .select('id, storage_path, original_filename, document_type, uploaded_at')
-      .eq('proposal_id', params.id)
-      .order('uploaded_at', { ascending: false }),
-    supabase
       .from('proposal_activations')
-      .select('notes, source, activation_catalog_items(area, name)')
+      .select(
+        'id, notes, source, status, priority, expected_impact, effort, responsible, start_date, end_date, ' +
+          'kpi_target, kpi_result, is_reusable, useful_life, ' +
+          'activation_catalog_items(area, name), channels(name), kpi_definitions(name)',
+      )
       .eq('proposal_id', params.id),
   ]);
 
-  // Genera enlaces de descarga temporales (1h) — el bucket es privado, RLS de storage.objects
-  // exige que el primer segmento de la ruta sea tu organization_id, igual que en la subida.
   const documentsWithUrls = await Promise.all(
     (documents ?? []).map(async (doc) => {
       const { data: signed } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 3600);
@@ -75,251 +88,372 @@ export default async function ProposalDetailPage({ params }: PageProps) {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const extractedJson = (extraction?.extracted_json ?? {}) as Record<string, any>;
-  const hasSocial = extractedJson.social_facebook || extractedJson.social_instagram || extractedJson.social_youtube;
+  const extractedJson = (extraction?.extracted_json ?? null) as Record<string, any> | null;
+
+  const stage = getWorkspaceStage(proposal);
+  const tone = getTone({ totalScore: proposal.total_score, overallRiskLevel: proposal.overall_risk_level });
+
+  const missingFields = REQUIRED_EXTRACTION_FIELDS.filter(
+    (f) => !extractedJson || extractedJson[f.key] === null || extractedJson[f.key] === undefined || extractedJson[f.key] === '',
+  );
+
+  const pendingActivations = (activations ?? []).filter((a) => a.status !== 'done' && a.status !== 'cancelled');
+
+  const totalCost = (financials ?? [])
+    .filter((f: any) => f.economic_concepts?.nature === 'cost' && f.estimated_amount !== null)
+    .reduce((sum: number, f: any) => sum + Number(f.estimated_amount), 0);
+  const totalResult = (financials ?? [])
+    .filter((f: any) => f.economic_concepts?.nature === 'result' && f.estimated_amount !== null)
+    .reduce((sum: number, f: any) => sum + Number(f.estimated_amount), 0);
+  const roi = totalCost > 0 ? totalResult / totalCost : null;
+
+  async function updateTitle(newTitle: string) {
+    'use server';
+    const client = createSupabaseServerClient();
+    await client.from('proposals').update({ title: newTitle }).eq('id', params.id);
+    revalidatePath(`/proposals/${params.id}`);
+  }
 
   return (
     <AppShell>
       <p>
         <Link href="/proposals">← Volver a propuestas</Link>
       </p>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ marginBottom: 4 }}>{proposal.title}</h1>
-          <p style={{ color: 'var(--c-mid)', margin: 0 }}>
-            {proposal.brands?.name ?? 'Corporativo (Gor Factory)'} · Estado:{' '}
-            <span className={`status s-${proposal.status}`}>{proposal.status}</span>{' '}
-            {proposal.submitted_at ? (
-              <span className="status s-evaluated" style={{ marginLeft: 6 }}>
-                Enviada el {new Date(proposal.submitted_at).toLocaleDateString('es-ES')}
+
+      {/* ── HEADER ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <ConfidenceRing totalScore={proposal.total_score} overallRiskLevel={proposal.overall_risk_level} size="lg" />
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22 }}>
+              {stage === 'draft' ? (
+                <InlineEditable value={proposal.title} onSave={updateTitle} fontSize={22} fontWeight={700} />
+              ) : (
+                proposal.title
+              )}
+            </h1>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <StatusPill stage={stage} />
+              <ScoreBadge totalScore={proposal.total_score} />
+              <RiskBadge level={proposal.overall_risk_level} />
+              <span style={{ fontSize: 12, color: 'var(--c-mid)', alignSelf: 'center' }}>
+                {(proposal as any).brands?.name ?? 'Corporativo'}
+                {proposal.partner_name ? ` · ${proposal.partner_name}` : ''}
               </span>
-            ) : (
-              <span className="status s-extracting" style={{ marginLeft: 6 }}>
-                Borrador
-              </span>
-            )}
-          </p>
+            </div>
+          </div>
         </div>
-        {!proposal.submitted_at && (
-          <div style={{ display: 'flex', gap: 8 }}>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {stage === 'draft' && (
             <Link href={`/proposals/${proposal.id}/edit`} className="btn btn-outline">
               ✏️ Editar
             </Link>
-            {proposal.recommendation && <SubmitProposalButton proposalId={proposal.id} />}
-          </div>
-        )}
+          )}
+          <LifecycleActions
+            proposalId={proposal.id}
+            hasRecommendation={Boolean(proposal.recommendation)}
+            submittedAt={proposal.submitted_at}
+            approvedAt={proposal.approved_at}
+            finalizedAt={proposal.finalized_at}
+          />
+        </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">Resultado de la evaluación</div>
-        <div className="stat-block">
-          <div>
-            <div className="stat-label">Score total</div>
-            <div className="stat-value">
-              {proposal.total_score !== null ? `${(Number(proposal.total_score) * 100).toFixed(0)}%` : '—'}
+      {/* ── DECISION STRIP — mismo componente, contenido distinto según el estado ── */}
+      <DecisionStrip
+        stage={stage}
+        tone={tone}
+        proposalId={proposal.id}
+        totalScore={proposal.total_score}
+        overallRiskLevel={proposal.overall_risk_level}
+        recommendation={proposal.recommendation}
+        pendingActivationsCount={pendingActivations.length}
+        missingFieldsCount={missingFields.length}
+      />
+
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        {/* ── ZONA CENTRAL: NIVEL 1 (adaptativo) + NIVEL 2 (detalle) ── */}
+        <div style={{ flex: 2, minWidth: 0 }}>
+          {/* NIVEL 1 */}
+          {stage === 'draft' && (
+            <div className="card">
+              <div className="card-title">¿Qué falta para poder evaluar?</div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 14 }}>
+                {REQUIRED_EXTRACTION_FIELDS.map((f) => {
+                  const done = extractedJson && extractedJson[f.key] !== null && extractedJson[f.key] !== undefined && extractedJson[f.key] !== '';
+                  return (
+                    <li key={f.key} style={{ padding: '6px 0', color: done ? 'var(--c-green)' : 'var(--c-mid)' }}>
+                      {done ? '✓' : '✗'} {f.label}
+                    </li>
+                  );
+                })}
+                <li style={{ padding: '6px 0', color: documentsWithUrls.length ? 'var(--c-green)' : 'var(--c-mid)' }}>
+                  {documentsWithUrls.length ? '✓' : '✗'} Documento adjunto ({documentsWithUrls.length})
+                </li>
+              </ul>
             </div>
-          </div>
-          <div>
-            <div className="stat-label">Riesgo global</div>
-            <div className="stat-value">{proposal.overall_risk_level ?? '—'}</div>
-          </div>
-          <div>
-            <div className="stat-label">Recomendación</div>
-            <div className="stat-value">{proposal.recommendation ?? '—'}</div>
-          </div>
-        </div>
-      </div>
-
-      {extraction && (
-        <div className="card">
-          <div className="card-title">Extracción ({extraction.model_used})</div>
-          <p>
-            <strong>Solicitante:</strong> {extractedJson.requester_name ?? '—'} ({extractedJson.requester_org ?? '—'})
-          </p>
-          <p>
-            <strong>Tipo de colaboración:</strong> {extractedJson.collaboration_type ?? '—'}
-          </p>
-          <p>
-            <strong>Resumen:</strong> {extractedJson.summary ?? '—'}
-          </p>
-          <p>
-            <strong>Importe estimado:</strong> {extractedJson.estimated_total_amount ?? '—'}{' '}
-            {extractedJson.currency ?? ''}
-          </p>
-          {extractedJson.website && (
-            <p>
-              <strong>Web:</strong>{' '}
-              <a href={extractedJson.website} target="_blank" rel="noopener noreferrer">
-                {extractedJson.website}
-              </a>
-            </p>
           )}
-          {hasSocial && (
-            <p>
-              <strong>Redes sociales:</strong>{' '}
-              {extractedJson.social_facebook && (
-                <a href={extractedJson.social_facebook} target="_blank" rel="noopener noreferrer" style={{ marginRight: 10 }}>
-                  Facebook
-                </a>
-              )}
-              {extractedJson.social_instagram && (
-                <a href={extractedJson.social_instagram} target="_blank" rel="noopener noreferrer" style={{ marginRight: 10 }}>
-                  Instagram
-                </a>
-              )}
-              {extractedJson.social_youtube && (
-                <a href={extractedJson.social_youtube} target="_blank" rel="noopener noreferrer">
-                  YouTube
-                </a>
-              )}
-            </p>
-          )}
-        </div>
-      )}
 
-      <div className="card">
-        <div className="card-title">Documentos adjuntos</div>
-        {!documentsWithUrls.length ? (
-          <p style={{ color: 'var(--c-mid)', margin: 0 }}>No hay documentos adjuntos.</p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {documentsWithUrls.map((doc) => (
-              <li
-                key={doc.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 0',
-                  borderBottom: '1px solid var(--c-line)',
-                }}
-              >
-                <span>{doc.original_filename ?? doc.storage_path.split('/').pop()}</span>
-                {doc.url ? (
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-outline"
-                    style={{ padding: '4px 10px', fontSize: 12 }}
-                  >
-                    Descargar
-                  </a>
-                ) : (
-                  <span style={{ color: 'var(--c-red)', fontSize: 12 }}>No disponible</span>
+          {stage === 'evaluated' && (
+            <div className="card">
+              <div className="card-title">Resumen de la evaluación</div>
+              <div className="stat-block" style={{ marginBottom: 12 }}>
+                <div>
+                  <div className="stat-label">Coste total</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{totalCost.toLocaleString('es-ES')} €</div>
+                </div>
+                <div>
+                  <div className="stat-label">Retorno esperado</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{totalResult.toLocaleString('es-ES')} €</div>
+                </div>
+                <div>
+                  <div className="stat-label">ROI estimado</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{roi !== null ? `${roi.toFixed(1)}x` : '—'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {stage === 'approved' && (
+            <div className="card">
+              <div className="card-title">Próximas activaciones ({pendingActivations.length} pendientes)</div>
+              {!pendingActivations.length ? (
+                <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Todo ejecutado — sin acciones pendientes.</p>
+              ) : (
+                <ul className="mini-list">
+                  {pendingActivations.slice(0, 5).map((a: any) => (
+                    <li key={a.id}>
+                      <span>
+                        {a.activation_catalog_items?.area} — {a.activation_catalog_items?.name}
+                        {a.responsible ? ` · ${a.responsible}` : ''}
+                      </span>
+                      <span style={{ color: 'var(--c-mid)' }}>{a.start_date ?? 'sin fecha'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p style={{ fontSize: 12, color: 'var(--c-mid)', marginTop: 12, marginBottom: 0 }}>
+                Coste comprometido: {totalCost.toLocaleString('es-ES')} €
+              </p>
+            </div>
+          )}
+
+          {stage === 'finalized' && (
+            <div className="card">
+              <div className="card-title">Resultado final</div>
+              <div className="stat-block" style={{ marginBottom: 12 }}>
+                <div>
+                  <div className="stat-label">Score de evaluación</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>
+                    {proposal.total_score !== null ? `${Math.round(proposal.total_score * 100)}%` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="stat-label">ROI estimado</div>
+                  <div className="stat-value" style={{ fontSize: 20 }}>{roi !== null ? `${roi.toFixed(1)}x` : '—'}</div>
+                </div>
+              </div>
+              <div className="card-title" style={{ marginTop: 8 }}>KPI: objetivo vs. resultado</div>
+              {!activations?.some((a) => a.kpi_target) ? (
+                <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Sin KPIs de activación registrados.</p>
+              ) : (
+                <ul className="mini-list">
+                  {(activations ?? [])
+                    .filter((a: any) => a.kpi_target)
+                    .map((a: any) => (
+                      <li key={a.id}>
+                        <span>{a.kpi_definitions?.name ?? 'KPI'}</span>
+                        <span>
+                          {a.kpi_target} → <strong>{a.kpi_result ?? 'sin resultado'}</strong>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* NIVEL 2 — detalle técnico, un clic de distancia */}
+          <details className="level-2">
+            <summary>Ver desglose de Evaluación ({scores?.length ?? 0} atributos)</summary>
+            <div className="level-2-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bloque</th>
+                    <th>Atributo</th>
+                    <th>Puntuación</th>
+                    <th>Origen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(scores ?? []).map((s: any, i: number) => (
+                    <tr key={i}>
+                      <td>{s.scoring_attributes?.scoring_blocks?.name}</td>
+                      <td>{s.scoring_attributes?.name}</td>
+                      <td>
+                        {Number(s.score_value).toFixed(3)} / {s.scoring_attributes?.max_score}
+                      </td>
+                      <td>{s.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details className="level-2">
+            <summary>Ver matriz de riesgo ({risks?.length ?? 0} factores)</summary>
+            <div className="level-2-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bloque</th>
+                    <th>Factor</th>
+                    <th>Nivel</th>
+                    <th>Impacto</th>
+                    <th>Puntuación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(risks ?? []).map((r: any, i: number) => (
+                    <tr key={i}>
+                      <td>{r.risk_factors?.risk_blocks?.name}</td>
+                      <td>{r.risk_factors?.name}</td>
+                      <td>{r.level}</td>
+                      <td>{r.impact}</td>
+                      <td>{r.computed_score}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details className="level-2">
+            <summary>Ver Costes-ROI ({financials?.length ?? 0} conceptos)</summary>
+            <div className="level-2-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Concepto</th>
+                    <th>Bloque</th>
+                    <th>Naturaleza</th>
+                    <th>Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(financials ?? []).map((f: any, i: number) => (
+                    <tr key={i}>
+                      <td>{f.economic_concepts?.name}</td>
+                      <td>{f.economic_concepts?.block_type ?? '—'}</td>
+                      <td>{f.economic_concepts?.nature === 'cost' ? 'Coste' : 'Resultado'}</td>
+                      <td>{f.estimated_amount !== null ? `${Number(f.estimated_amount).toLocaleString('es-ES')} €` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details className="level-2">
+            <summary>Ver plan de activación completo ({activations?.length ?? 0} acciones)</summary>
+            <div className="level-2-body" style={{ overflowX: 'auto' }}>
+              {!activations?.length ? (
+                <p style={{ color: 'var(--c-mid)', margin: 0 }}>Sin plan de activación definido.</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Acción</th>
+                      <th>Canal</th>
+                      <th>Prioridad</th>
+                      <th>Responsable</th>
+                      <th>Fechas</th>
+                      <th>KPI</th>
+                      <th>Seguimiento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activations.map((a: any) => (
+                      <tr key={a.id}>
+                        <td>
+                          {a.activation_catalog_items?.area} — {a.activation_catalog_items?.name}
+                        </td>
+                        <td>{a.channels?.name ?? '—'}</td>
+                        <td>{a.priority ?? '—'}</td>
+                        <td>{a.responsible ?? '—'}</td>
+                        <td style={{ fontSize: 12 }}>
+                          {a.start_date ?? '—'} → {a.end_date ?? '—'}
+                        </td>
+                        <td>{a.kpi_definitions?.name ? `${a.kpi_definitions.name}: ${a.kpi_target ?? '—'}` : '—'}</td>
+                        <td>
+                          <ActivationFollowUp actionId={a.id} currentStatus={a.status} currentKpiResult={a.kpi_result} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </details>
+
+          {/* NIVEL 3 — histórico, todavía sin construir (Fase D) */}
+          <details className="level-2">
+            <summary>Actividad e histórico</summary>
+            <div className="level-2-body">
+              <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>
+                Próximamente: timeline de eventos, comentarios del equipo e histórico con este partner
+                (Documento 5, Fase D — pendiente de desarrollo).
+              </p>
+            </div>
+          </details>
+        </div>
+
+        {/* ── PANEL DERECHO ── */}
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <AIInsightPanel title="Análisis">
+            {extractedJson?.summary ? (
+              <>
+                <p style={{ marginTop: 0 }}>{extractedJson.summary}</p>
+                {proposal.recommendation && (
+                  <p style={{ marginBottom: 0 }}>
+                    <strong>{proposal.recommendation}</strong> — score{' '}
+                    {proposal.total_score !== null ? Math.round(proposal.total_score * 100) : '—'}%, riesgo{' '}
+                    {proposal.overall_risk_level ?? '—'}.
+                  </p>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </>
+            ) : (
+              <p style={{ margin: 0 }}>Todavía no hay extracción ni evaluación que interpretar.</p>
+            )}
+          </AIInsightPanel>
 
-      <div className="card">
-        <div className="card-title">Scoring por atributo</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Bloque</th>
-              <th>Atributo</th>
-              <th>Puntuación</th>
-              <th>Origen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(scores ?? []).map((s: any, i: number) => (
-              <tr key={i}>
-                <td>{s.scoring_attributes?.scoring_blocks?.name}</td>
-                <td>{s.scoring_attributes?.name}</td>
-                <td>
-                  {Number(s.score_value).toFixed(3)} / {s.scoring_attributes?.max_score}
-                </td>
-                <td>{s.source}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Factores de riesgo</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Bloque</th>
-              <th>Factor</th>
-              <th>Nivel</th>
-              <th>Impacto</th>
-              <th>Puntuación</th>
-              <th>Origen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(risks ?? []).map((r: any, i: number) => (
-              <tr key={i}>
-                <td>{r.risk_factors?.risk_blocks?.name}</td>
-                <td>{r.risk_factors?.name}</td>
-                <td>{r.level}</td>
-                <td>{r.impact}</td>
-                <td>{r.computed_score}</td>
-                <td>{r.source}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Costes-ROI</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Bloque</th>
-              <th>Concepto</th>
-              <th>Naturaleza</th>
-              <th>Importe</th>
-              <th>Origen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(financials ?? []).map((f: any, i: number) => (
-              <tr key={i}>
-                <td>{f.economic_concepts?.block_type ?? '—'}</td>
-                <td>{f.economic_concepts?.name}</td>
-                <td>{f.economic_concepts?.nature === 'cost' ? 'Coste' : 'Resultado'}</td>
-                <td>{f.estimated_amount !== null ? `${Number(f.estimated_amount).toLocaleString('es-ES')} €` : '—'}</td>
-                <td>{f.source}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Plan de activación</div>
-        {!activations?.length ? (
-          <p style={{ color: 'var(--c-mid)', margin: 0 }}>Sin plan de activación definido.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Área</th>
-                <th>Acción</th>
-                <th>Notas</th>
-                <th>Origen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activations.map((a: any, i: number) => (
-                <tr key={i}>
-                  <td>{a.activation_catalog_items?.area}</td>
-                  <td>{a.activation_catalog_items?.name}</td>
-                  <td>{a.notes || '—'}</td>
-                  <td>{a.source}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-title">Documentos ({documentsWithUrls.length})</div>
+            {!documentsWithUrls.length ? (
+              <p style={{ color: 'var(--c-mid)', margin: 0, fontSize: 13 }}>Sin documentos adjuntos.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 13 }}>
+                {documentsWithUrls.map((doc) => (
+                  <li key={doc.id} style={{ padding: '6px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
+                      {doc.original_filename}
+                    </span>
+                    {doc.url ? (
+                      <a href={doc.url} target="_blank" rel="noreferrer">
+                        Descargar
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--c-mid)' }}>—</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
     </AppShell>
   );

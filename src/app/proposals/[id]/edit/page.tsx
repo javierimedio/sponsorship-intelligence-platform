@@ -13,7 +13,7 @@ interface PageProps {
 export default async function EditProposalPage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
   const profile = await getCurrentProfile(supabase);
-  const manualMode = (process.env.AI_PROVIDER ?? '').toLowerCase() === 'manual';
+  const defaultProvider = (process.env.AI_PROVIDER ?? 'manual').toLowerCase();
 
   if (!profile) {
     return (
@@ -50,33 +50,25 @@ export default async function EditProposalPage({ params }: PageProps) {
     );
   }
 
-  const [{ data: latestDocument }, { data: extraction }, { data: scores }, { data: risks }, { data: financials }, { data: activations }] =
-    await Promise.all([
-      supabase
-        .from('documents')
-        .select('id')
-        .eq('proposal_id', params.id)
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('ai_extractions')
-        .select('extracted_json')
-        .eq('proposal_id', params.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase.from('proposal_scores').select('scoring_attribute_id, score_value').eq('proposal_id', params.id),
-      supabase.from('proposal_risks').select('risk_factor_id, level, impact').eq('proposal_id', params.id),
-      supabase
-        .from('proposal_financials')
-        .select('economic_concept_id, estimated_amount')
-        .eq('proposal_id', params.id),
-      supabase
-        .from('proposal_activations')
-        .select('activation_catalog_item_id, notes')
-        .eq('proposal_id', params.id),
-    ]);
+  const [{ data: latestDocument }, { data: extraction }, { data: scores }, { data: risks }, { data: financials }] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('id')
+      .eq('proposal_id', params.id)
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('ai_extractions')
+      .select('extracted_json')
+      .eq('proposal_id', params.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('proposal_scores').select('scoring_attribute_id, score_value').eq('proposal_id', params.id),
+    supabase.from('proposal_risks').select('risk_factor_id, level, impact').eq('proposal_id', params.id),
+    supabase.from('proposal_financials').select('economic_concept_id, estimated_amount').eq('proposal_id', params.id),
+  ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const extractedJson = (extraction?.extracted_json ?? null) as Record<string, any> | null;
@@ -99,17 +91,11 @@ export default async function EditProposalPage({ params }: PageProps) {
           youtube: extractedJson.social_youtube ?? '',
         }
       : null,
-    scores: Object.fromEntries(
-      (scores ?? []).map((s) => [s.scoring_attribute_id, String(s.score_value)]),
-    ),
-    risks: Object.fromEntries(
-      (risks ?? []).map((r) => [r.risk_factor_id, { level: r.level, impact: r.impact }]),
-    ),
+    scores: Object.fromEntries((scores ?? []).map((s) => [s.scoring_attribute_id, String(s.score_value)])),
+    risks: Object.fromEntries((risks ?? []).map((r) => [r.risk_factor_id, { level: r.level, impact: r.impact }])),
     financials: Object.fromEntries(
       (financials ?? []).map((f) => [f.economic_concept_id, f.estimated_amount != null ? String(f.estimated_amount) : '']),
     ),
-    activationIds: (activations ?? []).map((a) => a.activation_catalog_item_id),
-    activationNotes: activations?.[0]?.notes ?? '',
   };
 
   return (
@@ -119,12 +105,12 @@ export default async function EditProposalPage({ params }: PageProps) {
       </p>
       <h1>Editar propuesta (Borrador)</h1>
       <p style={{ color: 'var(--c-mid)' }}>
-        Puedes corregir cualquier paso — extracción, evaluación o plan de activación. Cada vez que guardes un
-        paso se recalcula desde cero (no se acumulan versiones antiguas). Cuando esté lista, pulsa{' '}
-        <strong>Enviar propuesta</strong> al final.
+        Puedes corregir extracción y evaluación — se recalculan desde cero, sin acumular versiones antiguas.
+        El plan de activación (más abajo, tras recalcular) ya carga las acciones que hubiera guardadas.
+        Cuando esté lista, pulsa <strong>Enviar propuesta</strong> al final.
       </p>
       <div className="card">
-        <IntakeForm organizationId={profile.organizationId} manualMode={manualMode} editing={editingData} />
+        <IntakeForm organizationId={profile.organizationId} defaultProvider={defaultProvider} editing={editingData} />
       </div>
     </AppShell>
   );

@@ -39,7 +39,8 @@ export class RunExtractionAgentUseCase {
 
     const proposal = await this.proposalRepository.findById(input.proposalId);
     if (proposal) {
-      await this.proposalRepository.save(proposal.markExtracted());
+      const requesterOrg = typeof extractedJson.requester_org === 'string' ? extractedJson.requester_org : undefined;
+      await this.proposalRepository.save(proposal.markExtracted(requesterOrg));
     }
 
     return extractedJson;

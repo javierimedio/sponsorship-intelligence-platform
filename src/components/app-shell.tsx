@@ -14,13 +14,15 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   } = await supabase.auth.getUser();
 
   let displayName: string | null = null;
+  let isOrgAdmin = false;
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, role')
       .eq('id', user.id)
       .maybeSingle();
     displayName = profile?.full_name ?? null;
+    isOrgAdmin = profile?.role === 'org_admin';
   }
 
   return (
@@ -54,7 +56,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           />
         </div>
 
-        <TopNav />
+        <TopNav showUsersLink={isOrgAdmin} />
 
         <div className="topbar-right">
           {user && (
