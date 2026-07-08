@@ -48,7 +48,7 @@ function isPendingDecision(p: PipelineProposal): boolean {
   return p.stage === 'evaluated';
 }
 
-/** Prioridad de decisión (Documento de Fase 3): pendientes → score alto → riesgo bajo → resto. */
+/** Prioridad de decisión: pendientes → score alto → riesgo bajo → más días sin respuesta. */
 function priorityCompare(a: PipelineProposal, b: PipelineProposal): number {
   const pendingA = isPendingDecision(a) ? 0 : 1;
   const pendingB = isPendingDecision(b) ? 0 : 1;
@@ -62,7 +62,13 @@ function priorityCompare(a: PipelineProposal, b: PipelineProposal): number {
   const riskB = RISK_WEIGHT[b.overallRiskLevel ?? ''] ?? 1;
   if (riskA !== riskB) return riskA - riskB;
 
-  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  // Urgencia real: más días esperando respuesta va primero. "Caduca en X días" y "evento
+  // próximo" necesitarían fechas que no existen en el modelo todavía — no se fabrican.
+  return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+}
+
+function daysSince(dateStr: string): number {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function PipelineView({ proposals, initialStageFilter }: { proposals: PipelineProposal[]; initialStageFilter?: string }) {
@@ -106,7 +112,20 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
   async function runAction(id: string, action: 'approve' | 'reject' | 'request-review' | 'archive') {
     setBusyId(id);
     try {
-      const res = await fetch(`/api/proposals/${id}/${action}`, { method: 'POST' });
+      let body: string | undefined;
+      if (action === 'reject') {
+        const reason = window.prompt('Motivo del rechazo (opcional):');
+        if (reason === null) {
+          setBusyId(null);
+          return;
+        }
+        body = JSON.stringify({ reason });
+      }
+      const res = await fetch(`/api/proposals/${id}/${action}`, {
+        method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body,
+      });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(data.error ?? 'Error al actualizar la propuesta.');
@@ -202,6 +221,9 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
                   <div className="proposal-meta">
                     {p.brandName}
                     {p.partnerName ? ` · ${p.partnerName}` : ''}
+                    {canDecide && daysSince(p.updatedAt) >= 3 && (
+                      <span style={{ color: 'var(--c-red)', fontWeight: 600 }}> · Sin respuesta hace {daysSince(p.updatedAt)} días</span>
+                    )}
                   </div>
                 </div>
 
