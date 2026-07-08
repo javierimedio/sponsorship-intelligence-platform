@@ -150,6 +150,16 @@ function sanitizeFilename(filename: string): string {
     .replace(/[^a-zA-Z0-9.\-_]/g, '_');
 }
 
+// Inferencia automática por extensión — sin añadir un selector nuevo al formulario.
+// El primer documento de una propuesta suele ser el original recibido del solicitante.
+function inferDocumentType(filename: string): 'original' | 'email' | 'image' | 'other' {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (['eml', 'msg'].includes(ext)) return 'email';
+  if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) return 'image';
+  if (ext === 'pdf') return 'original';
+  return 'other';
+}
+
 async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
   if (!text) {
@@ -357,7 +367,12 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
       const documentRes = await fetch('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposalId: proposal.id, storagePath, originalFilename: file.name }),
+        body: JSON.stringify({
+          proposalId: proposal.id,
+          storagePath,
+          originalFilename: file.name,
+          documentType: inferDocumentType(file.name),
+        }),
       });
       const document = await safeJson(documentRes);
       if (!documentRes.ok) throw new Error(document.error ?? 'Error al registrar el documento.');
