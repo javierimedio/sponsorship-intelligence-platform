@@ -33,12 +33,14 @@ export function RiskBadge({ level }: { level: string | null }) {
 const STAGE_LABEL: Record<WorkspaceStage, string> = {
   draft: 'Borrador',
   evaluated: 'Evaluada',
+  rejected: 'Rechazada',
   approved: 'Aprobada',
   finalized: 'Finalizada',
 };
 const STAGE_COLOR: Record<WorkspaceStage, { fg: string; bg: string }> = {
   draft: { fg: 'var(--c-mid)', bg: 'var(--c-light)' },
   evaluated: { fg: 'var(--c-blue)', bg: 'var(--c-blue-l)' },
+  rejected: { fg: 'var(--c-red)', bg: 'var(--c-red-l)' },
   approved: { fg: 'var(--c-amber)', bg: 'var(--c-amber-l)' },
   finalized: { fg: 'var(--c-green)', bg: 'var(--c-green-l)' },
 };
