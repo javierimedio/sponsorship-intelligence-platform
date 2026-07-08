@@ -1,22 +1,20 @@
 // src/app/proposals/page.tsx
-// Listado rediseñado (Documento 6 + petición explícita de Fase A): filas, no tabla densa.
-// ConfidenceRing + badges dan toda la información de un vistazo, sin abrir nada.
+// Pipeline de decisiones (Fase 3) — Server Component: resuelve TODOS los datos (incluido
+// el responsable, vía la relación ya existente proposals.created_by → profiles) y se los
+// entrega a PipelineView, que hace filtrado/orden/búsqueda en el cliente.
 
 import Link from 'next/link';
 import { AppShell } from '@/components/app-shell';
-import { ConfidenceRing } from '@/components/confidence-ring';
-import { ScoreBadge, RiskBadge, StatusPill } from '@/components/badges';
+import { PipelineView, type PipelineProposal } from './pipeline-view';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { getWorkspaceStage } from '@/lib/workspace-stage';
 
-const RECOMMENDATION_COLOR: Record<string, string> = {
-  Recomendable: 'var(--c-green)',
-  Táctico: 'var(--c-amber)',
-  'No recomendable': 'var(--c-red)',
-};
+interface PageProps {
+  searchParams: { estado?: string };
+}
 
-export default async function ProposalsPage() {
+export default async function ProposalsPage({ searchParams }: PageProps) {
   const supabase = createSupabaseServerClient();
   const profile = await getCurrentProfile(supabase);
 
@@ -31,10 +29,27 @@ export default async function ProposalsPage() {
   const { data: proposals, error } = await supabase
     .from('proposals')
     .select(
-      'id, title, total_score, overall_risk_level, recommendation, created_at, submitted_at, ' +
-        'approved_at, finalized_at, partner_name, brands(name)',
+      'id, title, total_score, overall_risk_level, recommendation, created_at, updated_at, ' +
+        'submitted_at, approved_at, rejected_at, finalized_at, archived_at, partner_name, ' +
+        'brands(name), profiles(full_name)',
     )
     .order('created_at', { ascending: false });
+
+  const pipelineData: PipelineProposal[] = (proposals ?? []).map((p: any) => ({
+    id: p.id,
+    title: p.title,
+    brandName: p.brands?.name ?? 'Corporativo',
+    partnerName: p.partner_name,
+    responsibleName: p.profiles?.full_name ?? null,
+    totalScore: p.total_score,
+    overallRiskLevel: p.overall_risk_level,
+    recommendation: p.recommendation,
+    stage: getWorkspaceStage(p),
+    createdAt: p.created_at,
+    updatedAt: p.updated_at ?? p.created_at,
+  }));
+
+  const initialStageFilter = searchParams.estado === 'pendiente' ? 'pending' : undefined;
 
   return (
     <AppShell>
@@ -45,51 +60,11 @@ export default async function ProposalsPage() {
         </Link>
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
-        {error ? (
-          <p style={{ padding: '1rem', color: 'crimson' }}>{error.message}</p>
-        ) : !proposals?.length ? (
-          <div className="empty-state">
-            <p>
-              Aún no hay ninguna propuesta.{' '}
-              <Link href="/intake">Crea la primera →</Link>
-            </p>
-          </div>
-        ) : (
-          <div>
-            {proposals.map((p: any) => (
-              <Link key={p.id} href={`/proposals/${p.id}`} className="proposal-row">
-                <ConfidenceRing totalScore={p.total_score} overallRiskLevel={p.overall_risk_level} size="sm" />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="proposal-title">{p.title}</div>
-                  <div className="proposal-meta">
-                    {p.brands?.name ?? 'Corporativo'}
-                    {p.partner_name ? ` · ${p.partner_name}` : ''} ·{' '}
-                    {new Date(p.created_at).toLocaleDateString('es-ES')}
-                  </div>
-                </div>
-
-                <ScoreBadge totalScore={p.total_score} />
-                <RiskBadge level={p.overall_risk_level} />
-                <StatusPill stage={getWorkspaceStage(p)} />
-
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: p.recommendation ? RECOMMENDATION_COLOR[p.recommendation] ?? 'inherit' : 'var(--c-mid)',
-                    minWidth: 110,
-                    textAlign: 'right',
-                  }}
-                >
-                  {p.recommendation ?? '—'}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+      {error ? (
+        <p style={{ color: 'crimson' }}>{error.message}</p>
+      ) : (
+        <PipelineView proposals={pipelineData} initialStageFilter={initialStageFilter} />
+      )}
     </AppShell>
   );
 }
