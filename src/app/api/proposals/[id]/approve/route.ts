@@ -26,13 +26,17 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   if (proposal.approved_at) {
     return NextResponse.json({ error: 'Esta propuesta ya estaba aprobada.' }, { status: 409 });
   }
-  if (!proposal.submitted_at) {
-    return NextResponse.json({ error: 'Envía la propuesta antes de aprobarla.' }, { status: 400 });
+  if (!proposal.recommendation) {
+    return NextResponse.json({ error: 'Evalúa la propuesta antes de aprobarla.' }, { status: 400 });
   }
 
   const { error: updateError } = await supabase
     .from('proposals')
-    .update({ approved_at: new Date().toISOString() })
+    .update({
+      approved_at: new Date().toISOString(),
+      rejected_at: null,
+      submitted_at: proposal.submitted_at ?? new Date().toISOString(),
+    })
     .eq('id', params.id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
