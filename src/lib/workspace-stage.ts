@@ -2,16 +2,18 @@
 // Deriva el estado del Workspace a partir de datos que YA existen — sigue siendo una
 // función de presentación pura, ahora con 5 estados (se añade 'rejected').
 
-export type WorkspaceStage = 'draft' | 'evaluated' | 'rejected' | 'approved' | 'finalized';
+export type WorkspaceStage = 'draft' | 'evaluated' | 'rejected' | 'approved' | 'finalized' | 'archived';
 
 export interface ProposalLifecycleFields {
   recommendation: string | null;
   approved_at: string | null;
   rejected_at: string | null;
   finalized_at: string | null;
+  archived_at?: string | null;
 }
 
 export function getWorkspaceStage(proposal: ProposalLifecycleFields): WorkspaceStage {
+  if (proposal.archived_at) return 'archived';
   if (proposal.finalized_at) return 'finalized';
   if (proposal.rejected_at) return 'rejected';
   if (proposal.approved_at) return 'approved';
