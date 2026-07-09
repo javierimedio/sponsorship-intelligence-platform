@@ -537,6 +537,40 @@ details.level-2 .level-2-body {
   background: var(--c-light);
 }
 
+/* ── EXECUTIVE REPORT (impresión) ── */
+.print-page {
+  background: white;
+  font-family: 'Inter', sans-serif;
+  color: #1a1a1a;
+}
+.print-sheet {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px;
+}
+.print-page-break {
+  page-break-before: always;
+}
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.print-table th, .print-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+}
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+  .print-page-break {
+    page-break-before: always;
+  }
+}
+
 /* Modal genérico (usado por RejectDialog y futuros diálogos) */
 .dialog-overlay {
   position: fixed;
