@@ -21,6 +21,8 @@ import { generateExecutiveSummary, generateStrengthsAndWeaknesses } from '@/lib/
 import { LifecycleActions } from './lifecycle-actions';
 import { ActivationFollowUp } from './activation-followup';
 import { NegotiationSimulator } from '@/components/negotiation-simulator';
+import { DecisionConfidenceCard } from '@/components/decision-confidence';
+import { computeDecisionQuality, READINESS_LABEL } from '@/lib/decision-quality';
 
 interface PageProps {
   params: { id: string };
@@ -66,6 +68,9 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     { data: activations },
     { data: riskMatrixRules },
     { data: orgProposals },
+    { data: allScoringAttributes },
+    { data: allRiskFactors },
+    { data: approvedProposals },
   ] = await Promise.all([
     supabase.from('documents').select('id, original_filename, storage_path, document_type, uploaded_at').eq('proposal_id', params.id),
     supabase
@@ -100,6 +105,14 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .select('id, total_score, brand_id')
       .eq('organization_id', proposal.organization_id)
       .not('total_score', 'is', null),
+    supabase.from('scoring_attributes').select('id, scoring_blocks!inner(organization_id)').eq('scoring_blocks.organization_id', proposal.organization_id),
+    supabase.from('risk_factors').select('id, risk_blocks!inner(organization_id)').eq('risk_blocks.organization_id', proposal.organization_id),
+    supabase
+      .from('proposals')
+      .select('id, total_score, overall_risk_level, brand_id, brands(name), proposal_financials(estimated_amount, economic_concepts(nature))')
+      .eq('organization_id', proposal.organization_id)
+      .not('approved_at', 'is', null)
+      .is('finalized_at', null),
   ]);
 
   const documentsWithUrls = await Promise.all(
@@ -169,6 +182,37 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
   const brandScores = (orgProposals ?? []).filter((p: any) => p.brand_id === proposal.brand_id).map((p: any) => Number(p.total_score));
   const brandAvgScore = brandScores.length ? brandScores.reduce((a, b) => a + b, 0) / brandScores.length : null;
 
+  // Decision Confidence / Missing Information / Decision Readiness — Documento "Executive
+  // Experience". Todo derivado de datos ya existentes, cero IA, cero reglas nuevas del motor.
+  const decisionQuality = computeDecisionQuality({
+    hasRecommendation: Boolean(proposal.recommendation),
+    scoresCount: scores?.length ?? 0,
+    totalScoringAttributes: allScoringAttributes?.length ?? 0,
+    risksCount: risks?.length ?? 0,
+    totalRiskFactors: allRiskFactors?.length ?? 0,
+    missingFieldsCount: missingFields.length,
+    totalTrackedFields: REQUIRED_EXTRACTION_FIELDS.length,
+    benchmarkSampleSize: sampleSize,
+  });
+
+  // Portfolio Impact — "si apruebas esta propuesta", sobre las ya aprobadas + esta.
+  const approvedWithThis = [...(approvedProposals ?? []), { id: proposal.id, total_score: proposal.total_score, overall_risk_level: proposal.overall_risk_level, brand_id: proposal.brand_id, brands: (proposal as any).brands, proposal_financials: financials }];
+  const portfolioInvestment = approvedWithThis.reduce((sum: number, p: any) => {
+    const cost = (p.proposal_financials ?? [])
+      .filter((f: any) => f.economic_concepts?.nature === 'cost' && f.estimated_amount !== null)
+      .reduce((s: number, f: any) => s + Number(f.estimated_amount), 0);
+    return sum + cost;
+  }, 0);
+  const portfolioScores = approvedWithThis.filter((p: any) => p.total_score !== null).map((p: any) => Number(p.total_score));
+  const portfolioAvgScore = portfolioScores.length ? portfolioScores.reduce((a, b) => a + b, 0) / portfolioScores.length : null;
+  const portfolioHighRisk = approvedWithThis.some((p: any) => p.overall_risk_level === 'Alto');
+  const portfolioRiskLabel = portfolioHighRisk ? 'Alto' : approvedWithThis.some((p: any) => p.overall_risk_level === 'Medio') ? 'Medio' : 'Bajo';
+  const portfolioByBrand = new Map<string, number>();
+  for (const p of approvedWithThis as any[]) {
+    const name = p.brands?.name ?? 'Corporativo';
+    portfolioByBrand.set(name, (portfolioByBrand.get(name) ?? 0) + 1);
+  }
+
   // Timeline con iconos — derivada de timestamps ya existentes, sin tabla nueva.
   // Scoring/riesgo/financials se guardan atómicamente en la misma llamada (saveOutcome),
   // así que es UN solo evento real, no tres marcas de tiempo distintas fabricadas.
@@ -222,6 +266,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
               <StatusPill stage={stage} />
               <ScoreBadge totalScore={proposal.total_score} />
               <RiskBadge level={proposal.overall_risk_level} />
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{READINESS_LABEL[decisionQuality.readiness]}</span>
               <span style={{ fontSize: 12, color: 'var(--c-mid)', alignSelf: 'center' }}>
                 {(proposal as any).brands?.name ?? 'Corporativo'}
                 {proposal.partner_name ? ` · ${proposal.partner_name}` : ''}
@@ -260,24 +305,37 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         recommendation={proposal.recommendation}
       />
 
-      {stage === 'draft' && (
-        <div className="card">
-          <div className="card-title">¿Qué falta para poder evaluar?</div>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 14 }}>
-            {REQUIRED_EXTRACTION_FIELDS.map((f) => {
-              const done = extractedJson && extractedJson[f.key] !== null && extractedJson[f.key] !== undefined && extractedJson[f.key] !== '';
-              return (
-                <li key={f.key} style={{ padding: '6px 0', color: done ? 'var(--c-green)' : 'var(--c-mid)' }}>
-                  {done ? '✓' : '✗'} {f.label}
-                </li>
-              );
-            })}
-            <li style={{ padding: '6px 0', color: documentsWithUrls.length ? 'var(--c-green)' : 'var(--c-mid)' }}>
-              {documentsWithUrls.length ? '✓' : '✗'} Documento adjunto ({documentsWithUrls.length})
-            </li>
-          </ul>
+      <div className="card">
+        <div className="card-title">Información pendiente</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ flex: 1, background: 'var(--c-light)', borderRadius: 4, height: 8 }}>
+            <div
+              style={{
+                width: `${decisionQuality.completenessPct}%`,
+                background: decisionQuality.completenessPct === 100 ? 'var(--c-green)' : 'var(--c-amber)',
+                height: 8,
+                borderRadius: 4,
+              }}
+            />
+          </div>
+          <strong style={{ fontSize: 14 }}>{decisionQuality.completenessPct}% completo</strong>
         </div>
-      )}
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: 14 }}>
+          {REQUIRED_EXTRACTION_FIELDS.map((f) => {
+            const done = extractedJson && extractedJson[f.key] !== null && extractedJson[f.key] !== undefined && extractedJson[f.key] !== '';
+            return (
+              <li key={f.key} style={{ padding: '6px 0', color: done ? 'var(--c-green)' : 'var(--c-mid)' }}>
+                {done ? '✓' : `⚠ No incluye: ${f.label.toLowerCase()}`}
+              </li>
+            );
+          })}
+          <li style={{ padding: '6px 0', color: documentsWithUrls.length ? 'var(--c-green)' : 'var(--c-mid)' }}>
+            {documentsWithUrls.length ? `✓ Documento adjunto (${documentsWithUrls.length})` : '⚠ Sin documento adjunto'}
+          </li>
+        </ul>
+      </div>
+
+      {proposal.total_score !== null && <DecisionConfidenceCard quality={decisionQuality} />}
 
       {/* ── EVALUACIÓN DETALLADA ── */}
       <div className="card">
@@ -451,6 +509,48 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           </div>
         </div>
       )}
+
+      {stage !== 'draft' && (
+        <div className="card">
+          <div className="card-title">Portfolio Impact — si apruebas esta propuesta</div>
+          <div className="stat-block" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 20 }}>
+            <div>
+              <div className="stat-label">Inversión total</div>
+              <div className="stat-value" style={{ fontSize: 20 }}>{portfolioInvestment.toLocaleString('es-ES')} €</div>
+            </div>
+            <div>
+              <div className="stat-label">Score medio</div>
+              <div className="stat-value" style={{ fontSize: 20 }}>{portfolioAvgScore !== null ? Math.round(portfolioAvgScore * 100) : '—'}</div>
+            </div>
+            <div>
+              <div className="stat-label">Riesgo global</div>
+              <div className="stat-value" style={{ fontSize: 20 }}>{portfolioRiskLabel}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 6 }}>Distribución por marca</div>
+          <ul className="mini-list">
+            {[...portfolioByBrand.entries()].map(([brand, count]) => (
+              <li key={brand}>
+                <span>{brand}</span>
+                <strong>{Math.round((count / approvedWithThis.length) * 100)}%</strong>
+              </li>
+            ))}
+          </ul>
+          <p style={{ fontSize: 11, color: 'var(--c-mid)', marginTop: 10, marginBottom: 0 }}>
+            Incluye las propuestas ya aprobadas más esta ({approvedWithThis.length} en total).
+          </p>
+        </div>
+      )}
+
+      <div className="card">
+        <div className="card-title">Executive Report</div>
+        <p style={{ fontSize: 12, color: 'var(--c-mid)', marginTop: 0, marginBottom: 12 }}>
+          Genera un informe de 2 páginas listo para imprimir o guardar como PDF (usa el diálogo de impresión del navegador).
+        </p>
+        <Link href={`/proposals/${proposal.id}/print`} target="_blank" className="btn btn-amber">
+          Generar Executive Report
+        </Link>
+      </div>
 
       {/* ── MATRIZ DE RIESGO ── */}
       <div className="card">
