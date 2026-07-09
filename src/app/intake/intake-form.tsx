@@ -174,7 +174,7 @@ async function safeJson(res: Response): Promise<any> {
 
 export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeFormProps) {
   const [title, setTitle] = useState(editing?.title ?? '');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [phase, setPhase] = useState<Phase>(editing ? 'manual-extract' : 'input');
   const [message, setMessage] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
@@ -244,14 +244,25 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
   useEffect(() => {
     if (result && activationCatalog === null && proposalId) {
       Promise.all([
-        fetch('/api/activation-catalog').then(safeJson),
-        fetch(`/api/activations?proposalId=${proposalId}`).then(safeJson),
+        fetch('/api/activation-catalog').then(async (res) => {
+          const data = await safeJson(res);
+          if (!res.ok) throw new Error(data.error ?? 'Error al cargar el catálogo de activación.');
+          return data;
+        }),
+        fetch(`/api/activations?proposalId=${proposalId}`).then(async (res) => {
+          const data = await safeJson(res);
+          if (!res.ok) throw new Error(data.error ?? 'Error al cargar las activaciones.');
+          return data;
+        }),
       ])
         .then(([catalogData, actionsData]) => {
           setActivationCatalog(catalogData);
           setActivationActions(Array.isArray(actionsData) ? actionsData : []);
         })
-        .catch(() => setActivationCatalog({ items: [], channels: [], kpiDefinitions: [] }));
+        .catch((err) => {
+          setActivationCatalog({ items: [], channels: [], kpiDefinitions: [] });
+          setActivationMessage(`No se pudo cargar el plan de activación: ${(err as Error).message}`);
+        });
     }
   }, [result, activationCatalog, proposalId]);
 
@@ -340,9 +351,9 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
       setMessage('El título es obligatorio.');
       return;
     }
-    if (!file) {
+    if (!files.length) {
       setPhase('error');
-      setMessage('Sube un documento — hace falta para la extracción, automática o manual.');
+      setMessage('Sube al menos un documento — hace falta para la extracción, automática o manual.');
       return;
     }
 
@@ -359,24 +370,36 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
 
       setPhase('uploading');
       const supabase = createSupabaseBrowserClient();
-      const storagePath = `${organizationId}/${proposal.id}/${Date.now()}_${sanitizeFilename(file.name)}`;
-      const { error: uploadError } = await supabase.storage.from('documents').upload(storagePath, file);
-      if (uploadError) throw uploadError;
 
-      setPhase('registering');
-      const documentRes = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposalId: proposal.id,
-          storagePath,
-          originalFilename: file.name,
-          documentType: inferDocumentType(file.name),
-        }),
-      });
-      const document = await safeJson(documentRes);
-      if (!documentRes.ok) throw new Error(document.error ?? 'Error al registrar el documento.');
-      setDocumentId(document.id);
+      let primaryDocumentId: string | null = null;
+      let primaryStoragePath: string | null = null;
+
+      for (const currentFile of files) {
+        const storagePath = `${organizationId}/${proposal.id}/${Date.now()}_${sanitizeFilename(currentFile.name)}`;
+        const { error: uploadError } = await supabase.storage.from('documents').upload(storagePath, currentFile);
+        if (uploadError) throw uploadError;
+
+        setPhase('registering');
+        const documentRes = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            proposalId: proposal.id,
+            storagePath,
+            originalFilename: currentFile.name,
+            documentType: inferDocumentType(currentFile.name),
+          }),
+        });
+        const document = await safeJson(documentRes);
+        if (!documentRes.ok) throw new Error(document.error ?? `Error al registrar el documento "${currentFile.name}".`);
+
+        if (!primaryDocumentId) {
+          primaryDocumentId = document.id;
+          primaryStoragePath = storagePath;
+        }
+      }
+
+      setDocumentId(primaryDocumentId);
 
       if (selectedProvider === 'manual') {
         setPhase('manual-extract');
@@ -387,7 +410,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
       const extractionRes = await fetch('/api/extractions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposalId: proposal.id, documentId: document.id, storagePath, provider: selectedProvider }),
+        body: JSON.stringify({ proposalId: proposal.id, documentId: primaryDocumentId, storagePath: primaryStoragePath, provider: selectedProvider }),
       });
       const extraction = await safeJson(extractionRes);
       if (!extractionRes.ok) throw new Error(extraction.error ?? 'Error en la extracción.');
@@ -554,8 +577,26 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Documento (PDF/imagen)</label>
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} disabled={loading} />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa...). El primero se
+              usará para la extracción automática si aplica; el resto quedan adjuntos como referencia.
+            </label>
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg"
+              multiple
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              disabled={loading}
+            />
+            {files.length > 0 && (
+              <ul style={{ fontSize: 12, color: 'var(--c-mid)', margin: '6px 0 0', paddingLeft: 18 }}>
+                {files.map((f, i) => (
+                  <li key={i}>
+                    {f.name} {i === 0 ? '(principal, para extracción)' : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
