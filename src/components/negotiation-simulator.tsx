@@ -13,6 +13,7 @@ interface Lever {
   name: string;
   description: string | null;
   score_delta: number;
+  difficulty: string | null;
   scoring_attribute_id: string;
   scoring_attributes: { name: string; max_score: number; scoring_blocks: { name: string } } | null;
 }
@@ -118,6 +119,17 @@ export function NegotiationSimulator({
     });
   }
 
+  function applyScenario(scenario: 'conservador' | 'recomendado' | 'optimo') {
+    if (!levers) return;
+    const allowedDifficulty: Record<string, string[]> = {
+      conservador: ['Baja'],
+      recomendado: ['Baja', 'Media'],
+      optimo: ['Baja', 'Media', 'Alta'],
+    };
+    const allowed = allowedDifficulty[scenario];
+    setSelectedLevers(new Set(levers.filter((l) => l.difficulty && allowed.includes(l.difficulty)).map((l) => l.id)));
+  }
+
   function updateRisk(factorId: string, field: 'level' | 'impact', value: string) {
     setRiskOverrides((prev) => ({
       ...prev,
@@ -168,6 +180,23 @@ export function NegotiationSimulator({
 
       {levers.length > 0 && (
         <>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            <button className="btn btn-outline" style={{ fontSize: 12, padding: '.4rem .8rem' }} onClick={() => applyScenario('conservador')}>
+              Escenario Conservador
+            </button>
+            <button className="btn btn-outline" style={{ fontSize: 12, padding: '.4rem .8rem' }} onClick={() => applyScenario('recomendado')}>
+              Escenario Recomendado
+            </button>
+            <button className="btn btn-outline" style={{ fontSize: 12, padding: '.4rem .8rem' }} onClick={() => applyScenario('optimo')}>
+              Escenario Óptimo
+            </button>
+            {selectedLevers.size > 0 && (
+              <button className="btn btn-outline" style={{ fontSize: 12, padding: '.4rem .8rem' }} onClick={() => setSelectedLevers(new Set())}>
+                Limpiar
+              </button>
+            )}
+          </div>
+
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 8 }}>Palancas de negociación</div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, marginBottom: 16 }}>
             {levers.map((lever) => (
@@ -176,6 +205,11 @@ export function NegotiationSimulator({
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
                     {lever.name} <span style={{ color: 'var(--c-green)', fontWeight: 700 }}>+{Math.round(Number(lever.score_delta) * 100)}</span>
+                    {lever.difficulty && (
+                      <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 8, color: 'var(--c-mid)', textTransform: 'uppercase' }}>
+                        Dificultad: {lever.difficulty}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--c-mid)' }}>
                     {lever.scoring_attributes?.scoring_blocks?.name} — {lever.scoring_attributes?.name}
@@ -208,6 +242,28 @@ export function NegotiationSimulator({
                 </div>
               ))}
           </div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 8 }}>Priorización (impacto vs. dificultad)</div>
+          <table style={{ marginBottom: 20 }}>
+            <thead>
+              <tr>
+                <th>Palanca</th>
+                <th>Impacto</th>
+                <th>Dificultad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...levers]
+                .sort((a, b) => Number(b.score_delta) - Number(a.score_delta))
+                .map((lever) => (
+                  <tr key={lever.id}>
+                    <td style={{ fontSize: 12 }}>{lever.name}</td>
+                    <td style={{ fontSize: 12 }}>+{Math.round(Number(lever.score_delta) * 100)}</td>
+                    <td style={{ fontSize: 12 }}>{lever.difficulty ?? '—'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </>
       )}
 
