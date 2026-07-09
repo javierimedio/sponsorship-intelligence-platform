@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('negotiation_levers')
-    .select('id, name, description, score_delta, scoring_attribute_id, scoring_attributes(name, max_score, scoring_blocks(name))')
+    .select('id, name, description, score_delta, difficulty, scoring_attribute_id, scoring_attributes(name, max_score, scoring_blocks(name))')
     .eq('organization_id', profile.organizationId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
