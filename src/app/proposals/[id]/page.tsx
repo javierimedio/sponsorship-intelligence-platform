@@ -65,6 +65,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     { data: financials },
     { data: activations },
     { data: riskMatrixRules },
+    { data: orgProposals },
   ] = await Promise.all([
     supabase.from('documents').select('id, original_filename, storage_path, document_type, uploaded_at').eq('proposal_id', params.id),
     supabase
@@ -94,6 +95,11 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .eq('proposal_id', params.id)
       .order('created_at', { ascending: true }),
     supabase.from('risk_matrix_rules').select('level, impact, score').eq('organization_id', proposal.organization_id),
+    supabase
+      .from('proposals')
+      .select('id, total_score, brand_id')
+      .eq('organization_id', proposal.organization_id)
+      .not('total_score', 'is', null),
   ]);
 
   const documentsWithUrls = await Promise.all(
@@ -135,6 +141,33 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     pendingActivations,
   });
   const { strengths, weaknesses } = generateStrengthsAndWeaknesses(scores ?? []);
+
+  // "¿Qué penaliza esta propuesta?" — dos fuentes reales, con escalas distintas (0-1 vs
+  // 0-9), por eso se muestran en listas separadas en vez de forzarlas a una sola barra.
+  const scoringGaps = (scores ?? [])
+    .map((s: any) => ({
+      label: `${s.scoring_attributes?.scoring_blocks?.name} — ${s.scoring_attributes?.name}`,
+      gap: Number(s.scoring_attributes?.max_score ?? 0) - Number(s.score_value),
+    }))
+    .filter((g) => g.gap > 0.005)
+    .sort((a, b) => b.gap - a.gap);
+  const maxGap = Math.max(0.001, ...scoringGaps.map((g) => g.gap));
+
+  const relevantRisksForPenalty = (risks ?? [])
+    .filter((r: any) => r.level !== 'Bajo' || r.impact !== 'Bajo')
+    .map((r: any) => ({ label: r.risk_factors?.name ?? '', score: r.computed_score }))
+    .sort((a, b) => b.score - a.score);
+
+  // Benchmark interno — matemática pura sobre el histórico ya existente, sin IA.
+  const otherScores = (orgProposals ?? []).map((p: any) => Number(p.total_score));
+  const sampleSize = otherScores.length;
+  const percentile =
+    proposal.total_score !== null && sampleSize > 0
+      ? Math.round((otherScores.filter((s) => s <= proposal.total_score!).length / sampleSize) * 100)
+      : null;
+  const orgAvgScore = sampleSize > 0 ? otherScores.reduce((a, b) => a + b, 0) / sampleSize : null;
+  const brandScores = (orgProposals ?? []).filter((p: any) => p.brand_id === proposal.brand_id).map((p: any) => Number(p.total_score));
+  const brandAvgScore = brandScores.length ? brandScores.reduce((a, b) => a + b, 0) / brandScores.length : null;
 
   // Timeline con iconos — derivada de timestamps ya existentes, sin tabla nueva.
   // Scoring/riesgo/financials se guardan atómicamente en la misma llamada (saveOutcome),
@@ -253,6 +286,72 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           <EmptyState message="Sin evaluación todavía." />
         ) : (
           <>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 8 }}>
+                ¿Por qué tiene este score? — Contribución al resultado
+              </div>
+              {[...(scores as any[])]
+                .sort((a, b) => Number(b.score_value) - Number(a.score_value))
+                .map((s, i, sorted) => {
+                  const points = Math.round(Number(s.score_value) * 100);
+                  const maxPoints = Math.round(Number(sorted[0]?.score_value ?? 1) * 100) || 1;
+                  return (
+                    <div key={i} style={{ marginBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                        <span>{s.scoring_attributes?.name}</span>
+                        <strong style={{ color: 'var(--c-green)' }}>+{points}</strong>
+                      </div>
+                      <div style={{ background: 'var(--c-light)', borderRadius: 4, height: 6 }}>
+                        <div style={{ width: `${(points / maxPoints) * 100}%`, background: 'var(--c-green)', height: 6, borderRadius: 4 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              <div style={{ fontSize: 12, fontWeight: 700, marginTop: 8, textAlign: 'right' }}>
+                Total: {proposal.total_score !== null ? Math.round(proposal.total_score * 100) : '—'}
+              </div>
+            </div>
+
+            {(scoringGaps.length > 0 || relevantRisksForPenalty.length > 0) && (
+              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid var(--c-line)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-mid)', marginBottom: 8 }}>¿Qué penaliza esta propuesta?</div>
+
+                {scoringGaps.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--c-mid)', marginBottom: 4 }}>Margen de mejora en scoring</div>
+                    {scoringGaps.map((g, i) => (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                          <span>{g.label}</span>
+                          <strong style={{ color: 'var(--c-red)' }}>-{Math.round(g.gap * 100)}</strong>
+                        </div>
+                        <div style={{ background: 'var(--c-light)', borderRadius: 4, height: 6 }}>
+                          <div style={{ width: `${(g.gap / maxGap) * 100}%`, background: 'var(--c-red)', height: 6, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {relevantRisksForPenalty.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--c-mid)', marginBottom: 4 }}>Factores de riesgo relevantes (escala 0-9)</div>
+                    {relevantRisksForPenalty.map((r, i) => (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                          <span>{r.label}</span>
+                          <strong style={{ color: 'var(--c-red)' }}>{r.score}/9</strong>
+                        </div>
+                        <div style={{ background: 'var(--c-light)', borderRadius: 4, height: 6 }}>
+                          <div style={{ width: `${(r.score / 9) * 100}%`, background: 'var(--c-red)', height: 6, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {(scores as any[]).map((s, i) => {
               const pct = Math.min(100, (Number(s.score_value) / Number(s.scoring_attributes?.max_score || 1)) * 100);
               return (
@@ -315,6 +414,42 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           risks={(risks ?? []).map((r: any) => ({ factorId: r.risk_factor_id, name: r.risk_factors?.name ?? '', level: r.level, impact: r.impact }))}
           riskMatrixRules={(riskMatrixRules ?? []).map((r: any) => ({ level: r.level, impact: r.impact, score: r.score }))}
         />
+      )}
+
+      {proposal.total_score !== null && percentile !== null && (
+        <div className="card">
+          <div className="card-title">Benchmark interno</div>
+          <p style={{ fontSize: 11, color: 'var(--c-mid)', marginTop: 0, marginBottom: 12 }}>
+            Basado en {sampleSize} propuesta(s) evaluada(s) en tu organización — matemática pura sobre el histórico, sin IA.
+          </p>
+          <div className="stat-block" style={{ flexWrap: 'wrap', gap: 20 }}>
+            <div>
+              <div className="stat-label">Esta propuesta</div>
+              <div className="stat-value" style={{ fontSize: 20 }}>{Math.round(proposal.total_score * 100)}</div>
+            </div>
+            <div>
+              <div className="stat-label">Percentil</div>
+              <div className="stat-value" style={{ fontSize: 20 }}>{percentile}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-mid)' }}>
+                {percentile >= 50
+                  ? `Entre el ${100 - percentile}% de mejores propuestas analizadas.`
+                  : `Por debajo del ${percentile}% de propuestas analizadas.`}
+              </div>
+            </div>
+            {orgAvgScore !== null && (
+              <div>
+                <div className="stat-label">Score medio organización</div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{Math.round(orgAvgScore * 100)}</div>
+              </div>
+            )}
+            {brandAvgScore !== null && (
+              <div>
+                <div className="stat-label">Score medio {(proposal as any).brands?.name ?? 'Corporativo'}</div>
+                <div className="stat-value" style={{ fontSize: 20 }}>{Math.round(brandAvgScore * 100)}</div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── MATRIZ DE RIESGO ── */}
