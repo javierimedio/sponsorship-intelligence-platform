@@ -83,6 +83,7 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>('list');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
 
   const brands = useMemo(() => Array.from(new Set(proposals.map((p) => p.brandName))).sort(), [proposals]);
   const responsibles = useMemo(
@@ -145,6 +146,15 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
     } finally {
       setBusyId(null);
     }
+  }
+
+  function toggleCompare(id: string) {
+    setCompareIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 4) next.add(id); // 4 como tope razonable para una tabla comparativa
+      return next;
+    });
   }
 
   return (
@@ -220,6 +230,7 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
             const canArchive = p.stage !== 'archived';
             return (
               <div key={p.id} className="pipeline-card">
+                <input type="checkbox" checked={compareIds.has(p.id)} onChange={() => toggleCompare(p.id)} title="Seleccionar para comparar" />
                 <ConfidenceRing totalScore={p.totalScore} overallRiskLevel={p.overallRiskLevel} size="sm" />
 
                 <div className="avatar-fallback">{(p.partnerName ?? p.brandName ?? '?').charAt(0).toUpperCase()}</div>
@@ -291,6 +302,14 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
         onConfirm={confirmReject}
         loading={busyId === rejectTargetId}
       />
+
+      {compareIds.size >= 2 && (
+        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+          <Link href={`/proposals/compare?ids=${[...compareIds].join(',')}`} className="btn btn-amber" style={{ boxShadow: 'var(--shadow)' }}>
+            Comparar {compareIds.size} propuestas →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
