@@ -126,7 +126,7 @@ export function NegotiationSimulator({
       recomendado: ['Baja', 'Media'],
       optimo: ['Baja', 'Media', 'Alta'],
     };
-    const allowed = allowedDifficulty[scenario];
+    const allowed = allowedDifficulty[scenario] ?? [];
     setSelectedLevers(new Set(levers.filter((l) => l.difficulty && allowed.includes(l.difficulty)).map((l) => l.id)));
   }
 
