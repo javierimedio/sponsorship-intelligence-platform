@@ -71,6 +71,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     { data: allScoringAttributes },
     { data: allRiskFactors },
     { data: approvedProposals },
+    { data: brandContextRow },
   ] = await Promise.all([
     supabase.from('documents').select('id, original_filename, storage_path, document_type, uploaded_at').eq('proposal_id', params.id),
     supabase
@@ -113,6 +114,13 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .eq('organization_id', proposal.organization_id)
       .not('approved_at', 'is', null)
       .is('finalized_at', null),
+    proposal.brand_id
+      ? supabase
+          .from('brand_ai_context')
+          .select('positioning, evaluation_focus, recommended_activations, negotiation_guidelines, brands(name)')
+          .eq('brand_id', proposal.brand_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const documentsWithUrls = await Promise.all(
@@ -152,6 +160,15 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     scores: scores ?? [],
     risks: risks ?? [],
     pendingActivations,
+    brandContext: brandContextRow
+      ? {
+          brandName: (brandContextRow as any).brands?.name ?? 'esta marca',
+          positioning: (brandContextRow as any).positioning,
+          evaluationFocus: (brandContextRow as any).evaluation_focus,
+          recommendedActivations: (brandContextRow as any).recommended_activations,
+          negotiationGuidelines: (brandContextRow as any).negotiation_guidelines,
+        }
+      : null,
   });
   const { strengths, weaknesses } = generateStrengthsAndWeaknesses(scores ?? []);
 
