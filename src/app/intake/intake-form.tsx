@@ -73,7 +73,7 @@ interface CatalogRiskFactor {
 interface CatalogConcept {
   id: string;
   name: string;
-  nature: 'cost' | 'result';
+  nature: 'cost' | 'result' | 'resource';
   blockType: string | null;
 }
 interface Catalog {
@@ -739,7 +739,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               {concepts.map((c) => (
                 <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <label style={{ fontSize: 12, flex: 1 }}>
-                    {c.name} ({c.nature === 'cost' ? 'coste' : 'resultado'})
+                    {c.name} ({c.nature === 'cost' ? 'coste' : c.nature === 'resource' ? 'recurso' : 'resultado'})
                   </label>
                   <input
                     type="number"
