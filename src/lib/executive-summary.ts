@@ -11,6 +11,9 @@ export interface BrandAiContext {
   evaluationFocus: string[] | null;
   recommendedActivations: string | null;
   negotiationGuidelines: string | null;
+  strategicPriorities: string[] | null;
+  redFlags: string[] | null;
+  evaluationBias: string | null;
 }
 
 export interface ExecutiveSummaryInput {
@@ -76,13 +79,46 @@ export const generateExecutiveSummary: ExecutiveSummaryProvider = (input) => {
     const matchingFocus = brandContext.evaluationFocus.filter((focus) =>
       scoredAttributeNames.some((name) => name.includes(focus.toLowerCase()) || focus.toLowerCase().includes(name)),
     );
+
+    const priorities = brandContext.strategicPriorities?.length ? brandContext.strategicPriorities : brandContext.evaluationFocus;
+    const topPriorities = priorities.slice(0, 2).join(' y ');
+    const isPositive = proposal.recommendation === 'Recomendable';
+    const isNegative = proposal.recommendation === 'No recomendable';
+
     if (matchingFocus.length) {
       paragraphs.push(
         `Para ${brandContext.brandName}, esta propuesta conecta especialmente con: ${matchingFocus.join(', ')} — criterios que esta marca prioriza especialmente.`,
       );
+    }
+
+    if (brandContext.redFlags?.length) {
+      const riskNames = risks.map((r) => String(r.risk_factors?.name ?? '').toLowerCase());
+      const matchingRedFlags = brandContext.redFlags.filter((flag) =>
+        riskNames.some((name) => name.includes(flag.toLowerCase()) || flag.toLowerCase().includes(name)),
+      );
+      if (matchingRedFlags.length) {
+        paragraphs.push(
+          `⚠ Señal de alerta específica de ${brandContext.brandName}: esta propuesta presenta ${matchingRedFlags.join(', ')} — algo que esta marca considera especialmente problemático, más allá de lo que refleje el score.`,
+        );
+      }
+    }
+
+    // Cierre ejecutivo — siempre una recomendación concreta, nunca una duda abierta.
+    if (isNegative) {
+      paragraphs.push(
+        `Recomendación ejecutiva para ${brandContext.brandName}: pese al interés que pueda tener, esta propuesta no encaja hoy con las prioridades de ${topPriorities} — no se recomienda avanzar sin renegociar los puntos señalados como riesgo.`,
+      );
+    } else if (isPositive && matchingFocus.length) {
+      paragraphs.push(
+        `Recomendación ejecutiva para ${brandContext.brandName}: esta propuesta refuerza directamente ${topPriorities}, prioridades clave de la marca — se recomienda avanzar.`,
+      );
+    } else if (isPositive) {
+      paragraphs.push(
+        `Recomendación ejecutiva para ${brandContext.brandName}: el score es sólido, aunque no conecta de forma directa con ${topPriorities} — se recomienda avanzar, valorando si aporta algo distinto a lo habitual para la marca.`,
+      );
     } else {
       paragraphs.push(
-        `Para ${brandContext.brandName}, ninguno de los atributos con mayor puntuación coincide directamente con sus prioridades habituales (${brandContext.evaluationFocus.slice(0, 3).join(', ')}...) — merece revisarse si encaja estratégicamente aunque el score sea bueno.`,
+        `Recomendación ejecutiva para ${brandContext.brandName}: es una propuesta táctica — antes de decidir, conviene valorar si contribuye a ${topPriorities}, que es lo que más pesa para esta marca.`,
       );
     }
   }

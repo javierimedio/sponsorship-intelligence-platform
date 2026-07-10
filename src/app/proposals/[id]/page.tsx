@@ -117,7 +117,10 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
     proposal.brand_id
       ? supabase
           .from('brand_ai_context')
-          .select('positioning, evaluation_focus, recommended_activations, negotiation_guidelines, brands(name)')
+          .select(
+            'positioning, evaluation_focus, recommended_activations, negotiation_guidelines, ' +
+              'strategic_priorities, red_flags, evaluation_bias, brands(name)',
+          )
           .eq('brand_id', proposal.brand_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -167,6 +170,9 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           evaluationFocus: (brandContextRow as any).evaluation_focus,
           recommendedActivations: (brandContextRow as any).recommended_activations,
           negotiationGuidelines: (brandContextRow as any).negotiation_guidelines,
+          strategicPriorities: (brandContextRow as any).strategic_priorities,
+          redFlags: (brandContextRow as any).red_flags,
+          evaluationBias: (brandContextRow as any).evaluation_bias,
         }
       : null,
   });
