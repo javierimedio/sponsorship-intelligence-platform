@@ -14,6 +14,10 @@ export interface BrandAiContext {
   strategicPriorities: string[] | null;
   redFlags: string[] | null;
   evaluationBias: string | null;
+  /** Cuánto riesgo tolera esta marca a cambio de qué. Deliberadamente NO se usa en la
+   *  lógica determinista de hoy — simular "tolerancia al riesgo" con un if/else sería
+   *  IA de mentira. Queda aquí lista para el prompt real del día que exista IA de verdad. */
+  decisionStyle: string | null;
 }
 
 export interface ExecutiveSummaryInput {

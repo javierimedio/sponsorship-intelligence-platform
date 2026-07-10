@@ -119,7 +119,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           .from('brand_ai_context')
           .select(
             'positioning, evaluation_focus, recommended_activations, negotiation_guidelines, ' +
-              'strategic_priorities, red_flags, evaluation_bias, brands(name)',
+              'strategic_priorities, red_flags, evaluation_bias, decision_style, brands(name)',
           )
           .eq('brand_id', proposal.brand_id)
           .maybeSingle()
@@ -173,6 +173,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           strategicPriorities: (brandContextRow as any).strategic_priorities,
           redFlags: (brandContextRow as any).red_flags,
           evaluationBias: (brandContextRow as any).evaluation_bias,
+          decisionStyle: (brandContextRow as any).decision_style,
         }
       : null,
   });
