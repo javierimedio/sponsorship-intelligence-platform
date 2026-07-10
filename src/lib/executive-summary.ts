@@ -5,6 +5,14 @@
 // nunca el componente visual que lo consume.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface BrandAiContext {
+  brandName: string;
+  positioning: string | null;
+  evaluationFocus: string[] | null;
+  recommendedActivations: string | null;
+  negotiationGuidelines: string | null;
+}
+
 export interface ExecutiveSummaryInput {
   proposal: {
     total_score: number | null;
@@ -17,6 +25,10 @@ export interface ExecutiveSummaryInput {
   risks: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pendingActivations: any[];
+  /** Contexto de marca — SOLO para interpretar y redactar. Nunca llega a las llamadas
+   *  que producen score_value/level/impact/estimated_amount; esas siguen siendo idénticas
+   *  para cualquier marca. */
+  brandContext?: BrandAiContext | null;
 }
 
 /** Contrato que cualquier generador de Executive Summary debe cumplir — determinista hoy,
@@ -24,7 +36,7 @@ export interface ExecutiveSummaryInput {
 export type ExecutiveSummaryProvider = (input: ExecutiveSummaryInput) => Promise<string[]> | string[];
 
 export const generateExecutiveSummary: ExecutiveSummaryProvider = (input) => {
-  const { proposal, scores, risks, pendingActivations } = input;
+  const { proposal, scores, risks, pendingActivations, brandContext } = input;
 
   if (proposal.total_score === null) {
     return ['Esta propuesta todavía no ha sido evaluada — no hay nada que interpretar todavía.'];
@@ -56,6 +68,23 @@ export const generateExecutiveSummary: ExecutiveSummaryProvider = (input) => {
     const highPriority = pendingActivations.filter((a) => a.priority === 'Alta');
     const list = (highPriority.length ? highPriority : pendingActivations).slice(0, 2);
     paragraphs.push(`Las acciones que más incrementarían el ROI serían: ${list.map((a) => a.activation_catalog_items?.name).join(', ')}.`);
+  }
+
+  // Contexto de marca — solo interpretación, añadido al final, nunca toca el cálculo de arriba.
+  if (brandContext?.evaluationFocus?.length) {
+    const scoredAttributeNames = scores.map((s) => String(s.scoring_attributes?.name ?? '').toLowerCase());
+    const matchingFocus = brandContext.evaluationFocus.filter((focus) =>
+      scoredAttributeNames.some((name) => name.includes(focus.toLowerCase()) || focus.toLowerCase().includes(name)),
+    );
+    if (matchingFocus.length) {
+      paragraphs.push(
+        `Para ${brandContext.brandName}, esta propuesta conecta especialmente con: ${matchingFocus.join(', ')} — criterios que esta marca prioriza especialmente.`,
+      );
+    } else {
+      paragraphs.push(
+        `Para ${brandContext.brandName}, ninguno de los atributos con mayor puntuación coincide directamente con sus prioridades habituales (${brandContext.evaluationFocus.slice(0, 3).join(', ')}...) — merece revisarse si encaja estratégicamente aunque el score sea bueno.`,
+      );
+    }
   }
 
   return paragraphs;
