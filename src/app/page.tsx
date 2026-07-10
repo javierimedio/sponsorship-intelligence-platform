@@ -35,10 +35,42 @@ export default async function DashboardPage() {
 
   if (!user) {
     return (
-      <main style={{ padding: 32, fontFamily: 'Inter, sans-serif' }}>
-        <h1>GorFactory Collaboration Intelligence</h1>
-        <p>No has iniciado sesión.</p>
-        <Link href="/login">Iniciar sesión</Link>
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Arial, sans-serif',
+          background: 'linear-gradient(rgba(0,0,0,.68), rgba(0,0,0,.78)), url(/images/login-bg.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          textAlign: 'center',
+        }}
+      >
+        <img
+          src="https://paqtohmxagfebeyyurlq.supabase.co/storage/v1/object/public/assets/GORFACTORY_LOGO_BLANCO.png"
+          alt="GOR Factory"
+          style={{ height: 44, marginBottom: 24 }}
+        />
+        <h1 style={{ color: 'white', fontSize: 28, margin: '0 0 8px' }}>Sponsorship Intelligence Platform</h1>
+        <p style={{ color: 'rgba(255,255,255,.75)', margin: '0 0 32px', fontSize: 14 }}>
+          Evaluación y gestión inteligente de colaboraciones y patrocinios
+        </p>
+        <Link
+          href="/login"
+          className="btn btn-amber"
+          style={{ padding: '.75rem 2rem', fontSize: 14 }}
+        >
+          Iniciar sesión
+        </Link>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginTop: 48 }}>
+          <img src="https://static.gorfactory.es/images/header/logo_Roly_2025.svg" alt="Roly" style={{ height: 18, filter: 'brightness(0) invert(1)', opacity: 0.6 }} />
+          <img src="https://static.gorfactory.es/images/home/Logo_WRK_color.svg" alt="Roly WRK" style={{ height: 18, filter: 'brightness(0) invert(1)', opacity: 0.6 }} />
+          <img src="https://static.gorfactory.es/images/header/logo-stm-small.svg" alt="Stamina" style={{ height: 18, filter: 'brightness(0) invert(1)', opacity: 0.6 }} />
+        </div>
       </main>
     );
   }

@@ -26,8 +26,9 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
   background:
     linear-gradient(rgba(0,0,0,.68), rgba(0,0,0,.78)),
-    radial-gradient(circle at 30% 20%, #3a3a38, #17171630 60%),
-    var(--c-dark);
+    url('/images/login-bg.jpg');
+  background-size: cover;
+  background-position: center;
 }
 
 .auth-logo-top {
