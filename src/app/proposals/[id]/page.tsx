@@ -639,7 +639,13 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
                 <tr key={i}>
                   <td>{f.economic_concepts?.name}</td>
                   <td>{f.economic_concepts?.block_type ?? '—'}</td>
-                  <td>{f.economic_concepts?.nature === 'cost' ? 'Coste' : 'Resultado'}</td>
+                  <td>
+                    {f.economic_concepts?.nature === 'cost'
+                      ? 'Coste'
+                      : f.economic_concepts?.nature === 'resource'
+                        ? 'Recurso'
+                        : 'Resultado'}
+                  </td>
                   <td>{f.estimated_amount !== null ? `${Number(f.estimated_amount).toLocaleString('es-ES')} €` : '—'}</td>
                 </tr>
               ))}
@@ -761,7 +767,12 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
 
       {/* ── HISTORIAL DE CAMBIOS ── */}
       <div className="card">
-        <div className="card-title">Historial de cambios</div>
+        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Historial de cambios</span>
+          <Link href={`/proposals/${proposal.id}/versions`} style={{ fontSize: 12, fontWeight: 600 }}>
+            Ver versiones de evaluación y comparar →
+          </Link>
+        </div>
         {!extractionHistory?.length ? (
           <EmptyState message="Sin historial todavía." />
         ) : (
