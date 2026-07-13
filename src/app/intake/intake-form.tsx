@@ -237,7 +237,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
   const [newActionResponsible, setNewActionResponsible] = useState('');
   const [newActionStartDate, setNewActionStartDate] = useState('');
   const [newActionEndDate, setNewActionEndDate] = useState('');
-  const [newActionKpiId, setNewActionKpiId] = useState('');
+  const [newActionKpiName, setNewActionKpiName] = useState('');
   const [newActionKpiTarget, setNewActionKpiTarget] = useState('');
   const [newActionReusable, setNewActionReusable] = useState(false);
   const [newActionUsefulLife, setNewActionUsefulLife] = useState('');
@@ -288,7 +288,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
           responsible: newActionResponsible || null,
           startDate: newActionStartDate || null,
           endDate: newActionEndDate || null,
-          kpiDefinitionId: newActionKpiId || null,
+          kpiName: newActionKpiName || null,
           kpiTarget: newActionKpiTarget || null,
           isReusable: newActionReusable,
           usefulLife: newActionUsefulLife || null,
@@ -1031,14 +1031,13 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>KPI principal</label>
-                    <select value={newActionKpiId} onChange={(e) => setNewActionKpiId(e.target.value)} style={{ width: '100%', padding: 5 }}>
-                      <option value="">—</option>
-                      {activationCatalog.kpiDefinitions.map((k) => (
-                        <option key={k.id} value={k.id}>
-                          {k.name}
-                        </option>
-                      ))}
-                    </select>
+                    <input
+                      type="text"
+                      value={newActionKpiName}
+                      onChange={(e) => setNewActionKpiName(e.target.value)}
+                      placeholder="ej: Alcance, Interacciones, Leads..."
+                      style={{ width: '100%', padding: 5 }}
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3 }}>Objetivo del KPI</label>
