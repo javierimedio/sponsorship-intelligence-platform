@@ -19,18 +19,47 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   const body = await request.json().catch(() => null);
-  const useCase = new UpdateActivationFollowUpUseCase(
-    new SupabaseActivationResultRepository(supabase, profile.tenantId, profile.organizationId),
-  );
+  const repository = new SupabaseActivationResultRepository(supabase, profile.tenantId, profile.organizationId);
 
   try {
-    await useCase.execute({
-      actionId: params.id,
-      followUp: {
-        status: typeof body?.status === 'string' ? body.status : undefined,
-        kpiResult: typeof body?.kpiResult === 'string' ? body.kpiResult : undefined,
-      },
-    });
+    // Seguimiento (usado desde la ficha, tras aprobar la propuesta).
+    if (body && (Object.prototype.hasOwnProperty.call(body, 'status') || Object.prototype.hasOwnProperty.call(body, 'kpiResult'))) {
+      const useCase = new UpdateActivationFollowUpUseCase(repository);
+      await useCase.execute({
+        actionId: params.id,
+        followUp: {
+          status: typeof body.status === 'string' ? body.status : undefined,
+          kpiResult: typeof body.kpiResult === 'string' ? body.kpiResult : undefined,
+        },
+      });
+    }
+
+    // Edición completa (usado al corregir una acción ya añadida al plan, antes de enviar).
+    const fullEditKeys = [
+      'activationCatalogItemId', 'channelId', 'objective', 'description', 'priority',
+      'expectedImpact', 'effort', 'responsible', 'startDate', 'endDate',
+      'kpiDefinitionId', 'kpiName', 'kpiTarget', 'isReusable', 'usefulLife',
+    ];
+    if (body && fullEditKeys.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
+      await repository.updateAction(params.id, {
+        activationCatalogItemId: body.activationCatalogItemId,
+        channelId: body.channelId,
+        objective: body.objective,
+        description: body.description,
+        priority: body.priority,
+        expectedImpact: body.expectedImpact,
+        effort: body.effort,
+        responsible: body.responsible,
+        startDate: body.startDate,
+        endDate: body.endDate,
+        kpiDefinitionId: body.kpiDefinitionId,
+        kpiName: body.kpiName,
+        kpiTarget: body.kpiTarget,
+        isReusable: body.isReusable,
+        usefulLife: body.usefulLife,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
