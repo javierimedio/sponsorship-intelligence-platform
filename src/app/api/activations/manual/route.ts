@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         startDate: body.startDate || null,
         endDate: body.endDate || null,
         kpiDefinitionId: body.kpiDefinitionId || null,
+        kpiName: body.kpiName || null,
         kpiTarget: body.kpiTarget || null,
         isReusable: typeof body.isReusable === 'boolean' ? body.isReusable : null,
         usefulLife: body.usefulLife || null,
