@@ -28,6 +28,8 @@ export interface ActivationActionInput {
   startDate: string | null;
   endDate: string | null;
   kpiDefinitionId: string | null;
+  /** KPI como texto libre — independiente del catálogo cerrado kpiDefinitionId. */
+  kpiName: string | null;
   kpiTarget: string | null;
   isReusable: boolean | null;
   usefulLife: string | null;
