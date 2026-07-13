@@ -175,6 +175,7 @@ async function safeJson(res: Response): Promise<any> {
 export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeFormProps) {
   const [title, setTitle] = useState(editing?.title ?? '');
   const [files, setFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [phase, setPhase] = useState<Phase>(editing ? 'manual-extract' : 'input');
   const [message, setMessage] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
@@ -581,18 +582,81 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa...). El primero se
               usará para la extracción automática si aplica; el resto quedan adjuntos como referencia.
             </label>
-            <input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg"
-              multiple
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-              disabled={loading}
-            />
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!loading) setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (loading) return;
+                const dropped = Array.from(e.dataTransfer.files ?? []).filter((f) =>
+                  ['application/pdf', 'image/png', 'image/jpeg'].includes(f.type),
+                );
+                if (!dropped.length) return;
+                setFiles((prev) => {
+                  const existingKeys = new Set(prev.map((f) => `${f.name}_${f.size}`));
+                  const newOnes = dropped.filter((f) => !existingKeys.has(`${f.name}_${f.size}`));
+                  return [...prev, ...newOnes];
+                });
+              }}
+              style={{
+                border: `2px dashed ${isDragging ? 'var(--c-amber)' : 'var(--c-line)'}`,
+                borderRadius: 'var(--radius)',
+                background: isDragging ? 'var(--c-amber-l)' : 'var(--c-light)',
+                padding: '20px',
+                textAlign: 'center',
+                transition: 'border-color .15s, background .15s',
+              }}
+            >
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--c-mid)' }}>
+                Arrastra aquí el dossier, la presentación o la tarifa — o
+              </p>
+              <label
+                htmlFor="intake-file-input"
+                className="btn btn-outline"
+                style={{ display: 'inline-block', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13 }}
+              >
+                Examinar archivos
+              </label>
+              <input
+                id="intake-file-input"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                multiple
+                onChange={(e) => {
+                  const selected = Array.from(e.target.files ?? []);
+                  if (!selected.length) return;
+                  setFiles((prev) => {
+                    const existingKeys = new Set(prev.map((f) => `${f.name}_${f.size}`));
+                    const newOnes = selected.filter((f) => !existingKeys.has(`${f.name}_${f.size}`));
+                    return [...prev, ...newOnes];
+                  });
+                  e.target.value = ''; // permite volver a elegir el mismo archivo si se quita y se vuelve a añadir
+                }}
+                disabled={loading}
+                style={{ display: 'none' }}
+              />
+            </div>
+
             {files.length > 0 && (
-              <ul style={{ fontSize: 12, color: 'var(--c-mid)', margin: '6px 0 0', paddingLeft: 18 }}>
+              <ul style={{ fontSize: 12, color: 'var(--c-mid)', margin: '10px 0 0', padding: 0, listStyle: 'none' }}>
                 {files.map((f, i) => (
-                  <li key={i}>
-                    {f.name} {i === 0 ? '(principal, para extracción)' : ''}
+                  <li key={`${f.name}_${f.size}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                    <span>
+                      {f.name} {i === 0 ? <strong style={{ color: 'var(--c-dark)' }}>(principal, para extracción)</strong> : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      disabled={loading}
+                      style={{ background: 'none', border: 'none', color: 'var(--c-red)', cursor: 'pointer', fontSize: 12, padding: '2px 6px' }}
+                    >
+                      Quitar
+                    </button>
                   </li>
                 ))}
               </ul>
