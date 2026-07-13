@@ -19,6 +19,7 @@ export interface ActivationCatalogRepository {
 export interface ActivationResultRepository {
   addAction(proposalId: ProposalId, input: ActivationActionInput, source: 'ai' | 'manual'): Promise<ActivationAction>;
   listActions(proposalId: ProposalId): Promise<ActivationAction[]>;
+  updateAction(actionId: string, input: Partial<ActivationActionInput>): Promise<void>;
   updateFollowUp(actionId: string, input: ActivationFollowUpInput): Promise<void>;
   deleteAction(actionId: string): Promise<void>;
 }
