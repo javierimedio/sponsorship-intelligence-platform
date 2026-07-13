@@ -95,7 +95,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
       .from('proposal_activations')
       .select(
         'id, source, status, priority, expected_impact, effort, responsible, start_date, end_date, created_at, ' +
-          'kpi_target, kpi_result, is_reusable, useful_life, ' +
+          'kpi_name, kpi_target, kpi_result, is_reusable, useful_life, ' +
           'activation_catalog_items(area, name), channels(name), kpi_definitions(name)',
       )
       .eq('proposal_id', params.id)
@@ -728,7 +728,11 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
                       <td style={{ fontSize: 12 }}>
                         {a.start_date ?? '—'} → {a.end_date ?? '—'}
                       </td>
-                      <td>{a.kpi_definitions?.name ? `${a.kpi_definitions.name}: ${a.kpi_target ?? '—'}` : '—'}</td>
+                      <td>
+                        {a.kpi_name || a.kpi_definitions?.name
+                          ? `${a.kpi_name ?? a.kpi_definitions?.name}: ${a.kpi_target ?? '—'}`
+                          : '—'}
+                      </td>
                       <td>
                         <ActivationFollowUp actionId={a.id} currentStatus={a.status} currentKpiResult={a.kpi_result} />
                       </td>
