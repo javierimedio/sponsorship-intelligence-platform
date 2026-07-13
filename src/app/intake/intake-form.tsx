@@ -114,6 +114,7 @@ interface ActivationActionView {
   status: string;
   kpiDefinitionId: string | null;
   kpiDefinitionName?: string | null;
+  kpiName?: string | null;
   kpiTarget: string | null;
   kpiResult: string | null;
   isReusable: boolean | null;
@@ -241,6 +242,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
   const [newActionKpiTarget, setNewActionKpiTarget] = useState('');
   const [newActionReusable, setNewActionReusable] = useState(false);
   const [newActionUsefulLife, setNewActionUsefulLife] = useState('');
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (result && activationCatalog === null && proposalId) {
@@ -267,42 +269,104 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
     }
   }, [result, activationCatalog, proposalId]);
 
+  function resetActivationForm() {
+    setNewActionItemId('');
+    setNewActionChannelId('');
+    setNewActionObjective('');
+    setNewActionDescription('');
+    setNewActionPriority('Media');
+    setNewActionImpact('Medio');
+    setNewActionEffort('Medio');
+    setNewActionResponsible('');
+    setNewActionStartDate('');
+    setNewActionEndDate('');
+    setNewActionKpiName('');
+    setNewActionKpiTarget('');
+    setNewActionReusable(false);
+    setNewActionUsefulLife('');
+    setEditingActionId(null);
+  }
+
+  function handleStartEditActivationAction(a: (typeof activationActions)[number]) {
+    setEditingActionId(a.id);
+    setNewActionItemId(a.activationCatalogItemId ?? '');
+    setNewActionChannelId(a.channelId ?? '');
+    setNewActionObjective(a.objective ?? '');
+    setNewActionDescription(a.description ?? '');
+    setNewActionPriority(a.priority ?? 'Media');
+    setNewActionImpact(a.expectedImpact ?? 'Medio');
+    setNewActionEffort(a.effort ?? 'Medio');
+    setNewActionResponsible(a.responsible ?? '');
+    setNewActionStartDate(a.startDate ?? '');
+    setNewActionEndDate(a.endDate ?? '');
+    setNewActionKpiName(a.kpiName ?? '');
+    setNewActionKpiTarget(a.kpiTarget ?? '');
+    setNewActionReusable(a.isReusable ?? false);
+    setNewActionUsefulLife(a.usefulLife ?? '');
+    setActivationMessage(null);
+  }
+
   async function handleAddActivationAction(event: FormEvent) {
     event.preventDefault();
     if (!proposalId || !newActionItemId) return;
     setActivationMessage(null);
 
-    try {
-      const res = await fetch('/api/activations/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposalId,
-          activationCatalogItemId: newActionItemId,
-          channelId: newActionChannelId || null,
-          objective: newActionObjective || null,
-          description: newActionDescription || null,
-          priority: newActionPriority || null,
-          expectedImpact: newActionImpact || null,
-          effort: newActionEffort || null,
-          responsible: newActionResponsible || null,
-          startDate: newActionStartDate || null,
-          endDate: newActionEndDate || null,
-          kpiName: newActionKpiName || null,
-          kpiTarget: newActionKpiTarget || null,
-          isReusable: newActionReusable,
-          usefulLife: newActionUsefulLife || null,
-        }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error ?? 'Error al añadir la acción.');
+    const payload = {
+      activationCatalogItemId: newActionItemId,
+      channelId: newActionChannelId || null,
+      objective: newActionObjective || null,
+      description: newActionDescription || null,
+      priority: newActionPriority || null,
+      expectedImpact: newActionImpact || null,
+      effort: newActionEffort || null,
+      responsible: newActionResponsible || null,
+      startDate: newActionStartDate || null,
+      endDate: newActionEndDate || null,
+      kpiName: newActionKpiName || null,
+      kpiTarget: newActionKpiTarget || null,
+      isReusable: newActionReusable,
+      usefulLife: newActionUsefulLife || null,
+    };
 
-      setActivationActions((prev) => [...prev, data]);
-      setNewActionObjective('');
-      setNewActionDescription('');
-      setNewActionResponsible('');
-      setNewActionKpiTarget('');
-      setActivationMessage('Acción añadida al plan.');
+    try {
+      if (editingActionId) {
+        const res = await fetch(`/api/activations/${editingActionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data.error ?? 'Error al guardar los cambios.');
+
+        setActivationActions((prev) =>
+          prev.map((a) =>
+            a.id === editingActionId
+              ? {
+                  ...a,
+                  ...payload,
+                  activationCatalogItemArea:
+                    activationCatalog?.items.find((i) => i.id === newActionItemId)?.area ?? a.activationCatalogItemArea,
+                  activationCatalogItemName:
+                    activationCatalog?.items.find((i) => i.id === newActionItemId)?.name ?? a.activationCatalogItemName,
+                  channelName: activationCatalog?.channels.find((c) => c.id === newActionChannelId)?.name ?? null,
+                }
+              : a,
+          ),
+        );
+        setActivationMessage('Cambios guardados.');
+      } else {
+        const res = await fetch('/api/activations/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposalId, ...payload }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data.error ?? 'Error al añadir la acción.');
+
+        setActivationActions((prev) => [...prev, data]);
+        setActivationMessage('Acción añadida al plan.');
+      }
+      resetActivationForm();
     } catch (error) {
       setActivationMessage((error as Error).message);
     }
@@ -310,6 +374,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
 
   async function handleDeleteActivationAction(id: string) {
     setActivationActions((prev) => prev.filter((a) => a.id !== id));
+    if (editingActionId === id) resetActivationForm();
     try {
       await fetch(`/api/activations/${id}`, { method: 'DELETE' });
     } catch {
@@ -920,9 +985,16 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
                           <td style={{ padding: 6 }}>{a.priority ?? '—'}</td>
                           <td style={{ padding: 6 }}>{a.responsible ?? '—'}</td>
                           <td style={{ padding: 6 }}>
-                            {a.kpiDefinitionName ? `${a.kpiDefinitionName}: ${a.kpiTarget ?? '—'}` : '—'}
+                            {a.kpiName || a.kpiDefinitionName ? `${a.kpiName ?? a.kpiDefinitionName}: ${a.kpiTarget ?? '—'}` : '—'}
                           </td>
-                          <td style={{ padding: 6 }}>
+                          <td style={{ padding: 6, whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditActivationAction(a)}
+                              style={{ fontSize: 11, color: 'var(--c-amber)', background: 'none', border: 'none', cursor: 'pointer', marginRight: 8 }}
+                            >
+                              Editar
+                            </button>
                             <button type="button" onClick={() => handleDeleteActivationAction(a.id)} style={{ fontSize: 11, color: 'crimson', background: 'none', border: 'none', cursor: 'pointer' }}>
                               Eliminar
                             </button>
@@ -935,7 +1007,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               )}
 
               <form onSubmit={handleAddActivationAction} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: '#fafafa', borderRadius: 4 }}>
-                <strong style={{ fontSize: 13 }}>Añadir acción</strong>
+                <strong style={{ fontSize: 13 }}>{editingActionId ? 'Editar acción' : 'Añadir acción'}</strong>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
@@ -1062,9 +1134,16 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
                   </div>
                 </div>
 
-                <button type="submit" className="btn btn-amber" style={{ width: 'fit-content' }}>
-                  + Añadir acción
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button type="submit" className="btn btn-amber" style={{ width: 'fit-content' }}>
+                    {editingActionId ? 'Guardar cambios' : '+ Añadir acción'}
+                  </button>
+                  {editingActionId && (
+                    <button type="button" onClick={resetActivationForm} className="btn btn-outline" style={{ width: 'fit-content', fontSize: 13 }}>
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
                 {activationMessage && <p style={{ fontSize: 12, color: 'green', margin: 0 }}>{activationMessage}</p>}
               </form>
             </>
