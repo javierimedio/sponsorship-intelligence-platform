@@ -64,6 +64,7 @@ interface ActionRow {
   end_date: string | null;
   status: string;
   kpi_definition_id: string | null;
+  kpi_name: string | null;
   kpi_target: string | null;
   kpi_result: string | null;
   is_reusable: boolean | null;
@@ -89,6 +90,7 @@ function toDomain(row: ActionRow): ActivationAction {
     endDate: row.end_date,
     status: row.status,
     kpiDefinitionId: row.kpi_definition_id,
+    kpiName: row.kpi_name,
     kpiTarget: row.kpi_target,
     kpiResult: row.kpi_result,
     isReusable: row.is_reusable,
@@ -103,7 +105,7 @@ function toDomain(row: ActionRow): ActivationAction {
 
 const SELECT_WITH_JOINS =
   'id, activation_catalog_item_id, channel_id, objective, description, priority, expected_impact, ' +
-  'effort, responsible, start_date, end_date, status, kpi_definition_id, kpi_target, kpi_result, ' +
+  'effort, responsible, start_date, end_date, status, kpi_definition_id, kpi_name, kpi_target, kpi_result, ' +
   'is_reusable, useful_life, source, ' +
   'activation_catalog_items(area, name), channels(name), kpi_definitions(name)';
 
@@ -136,6 +138,7 @@ export class SupabaseActivationResultRepository implements ActivationResultRepos
       start_date: input.startDate,
       end_date: input.endDate,
       kpi_definition_id: input.kpiDefinitionId,
+      kpi_name: input.kpiName,
       kpi_target: input.kpiTarget,
       is_reusable: input.isReusable,
       useful_life: input.usefulLife,
