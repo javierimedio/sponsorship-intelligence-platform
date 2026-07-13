@@ -165,6 +165,29 @@ export class SupabaseActivationResultRepository implements ActivationResultRepos
     return (data as unknown as ActionRow[] | null ?? []).map(toDomain);
   }
 
+  async updateAction(actionId: string, input: Partial<ActivationActionInput>): Promise<void> {
+    const updates: Record<string, unknown> = {};
+    if (input.activationCatalogItemId !== undefined) updates.activation_catalog_item_id = input.activationCatalogItemId;
+    if (input.channelId !== undefined) updates.channel_id = input.channelId;
+    if (input.objective !== undefined) updates.objective = input.objective;
+    if (input.description !== undefined) updates.description = input.description;
+    if (input.priority !== undefined) updates.priority = input.priority;
+    if (input.expectedImpact !== undefined) updates.expected_impact = input.expectedImpact;
+    if (input.effort !== undefined) updates.effort = input.effort;
+    if (input.responsible !== undefined) updates.responsible = input.responsible;
+    if (input.startDate !== undefined) updates.start_date = input.startDate;
+    if (input.endDate !== undefined) updates.end_date = input.endDate;
+    if (input.kpiDefinitionId !== undefined) updates.kpi_definition_id = input.kpiDefinitionId;
+    if (input.kpiName !== undefined) updates.kpi_name = input.kpiName;
+    if (input.kpiTarget !== undefined) updates.kpi_target = input.kpiTarget;
+    if (input.isReusable !== undefined) updates.is_reusable = input.isReusable;
+    if (input.usefulLife !== undefined) updates.useful_life = input.usefulLife;
+    if (!Object.keys(updates).length) return;
+
+    const { error } = await this.client.from('proposal_activations').update(updates).eq('id', actionId);
+    if (error) throw error;
+  }
+
   async updateFollowUp(actionId: string, input: ActivationFollowUpInput): Promise<void> {
     const updates: Record<string, unknown> = {};
     if (input.status !== undefined) updates.status = input.status;
