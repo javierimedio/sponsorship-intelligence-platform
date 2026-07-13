@@ -349,7 +349,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
             const done = extractedJson && extractedJson[f.key] !== null && extractedJson[f.key] !== undefined && extractedJson[f.key] !== '';
             return (
               <li key={f.key} style={{ padding: '6px 0', color: done ? 'var(--c-green)' : 'var(--c-mid)' }}>
-                {done ? '✓' : `⚠ No incluye: ${f.label.toLowerCase()}`}
+                {done ? `✓ ${f.label}` : `⚠ No incluye: ${f.label.toLowerCase()}`}
               </li>
             );
           })}
