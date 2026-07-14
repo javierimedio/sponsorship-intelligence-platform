@@ -23,21 +23,26 @@ function getClient(): Anthropic {
 async function askClaudeForJson(
   system: string,
   userText: string,
-  file?: { buffer: Buffer; mediaType: string },
+  files?: { buffer: Buffer; mediaType: string }[],
 ): Promise<unknown> {
   const client = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const content: any[] = [];
 
-  if (file) {
-    content.push({
-      type: 'document',
-      source: {
-        type: 'base64',
-        media_type: file.mediaType,
-        data: file.buffer.toString('base64'),
-      },
-    });
+  for (const file of files ?? []) {
+    if (file.mediaType === 'application/pdf') {
+      // Claude solo acepta application/pdf en el bloque "document" — cualquier imagen
+      // (jpg/png) tiene que ir por el bloque "image", si no la API la rechaza.
+      content.push({
+        type: 'document',
+        source: { type: 'base64', media_type: file.mediaType, data: file.buffer.toString('base64') },
+      });
+    } else {
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: file.mediaType, data: file.buffer.toString('base64') },
+      });
+    }
   }
   content.push({ type: 'text', text: userText });
 
@@ -60,9 +65,12 @@ async function askClaudeForJson(
 }
 
 export class AnthropicProvider implements AIProvider {
-  async extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>> {
+  async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
+      'Puede que recibas varios archivos (por ejemplo, un dossier convertido página por ' +
+      'página a varias imágenes) — léelos TODOS como un único documento combinado, no solo ' +
+      'el primero. ' +
       'Lee el documento y devuelve ÚNICAMENTE un objeto JSON (sin texto adicional, sin markdown) ' +
       'con esta forma exacta: {"requester_name": string|null, "requester_org": string|null, ' +
       '"collaboration_type": string|null, "summary": string, "assets_offered": string[], ' +
@@ -73,8 +81,8 @@ export class AnthropicProvider implements AIProvider {
 
     const result = await askClaudeForJson(
       system,
-      'Extrae la información de este documento de propuesta de colaboración.',
-      { buffer: fileBuffer, mediaType },
+      'Extrae la información de este documento de propuesta de colaboración (puede venir en varios archivos).',
+      files,
     );
     return result as Record<string, unknown>;
   }
