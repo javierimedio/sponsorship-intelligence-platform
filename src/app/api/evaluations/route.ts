@@ -10,6 +10,8 @@ import {
 } from '@/infrastructure/supabase/evaluation-repository';
 import { getAIProvider } from '@/infrastructure/ai/get-ai-provider';
 import { EvaluateProposalUseCase } from '@/application/use-cases/evaluation/evaluate-proposal';
+import { SuggestActivationsUseCase } from '@/application/use-cases/activation/suggest-activations';
+import { SupabaseActivationCatalogRepository, SupabaseActivationResultRepository } from '@/infrastructure/supabase/activation-repository';
 import { asProposalId } from '@/domain/shared/ids';
 
 export async function POST(request: NextRequest) {
@@ -50,6 +52,23 @@ export async function POST(request: NextRequest) {
       proposalId: asProposalId(proposalId),
       extractedData,
     });
+
+    // Agente 4 — Activación: best-effort. Si falla (proveedor caído, respuesta rara...),
+    // no debe tirar abajo una evaluación de scoring/riesgo/financials que sí salió bien.
+    try {
+      const activationUseCase = new SuggestActivationsUseCase(
+        new SupabaseActivationCatalogRepository(supabase),
+        new SupabaseActivationResultRepository(supabase, profile.tenantId, profile.organizationId),
+        getAIProvider(provider),
+      );
+      await activationUseCase.execute({
+        organizationId: profile.organizationId,
+        proposalId: asProposalId(proposalId),
+        extractedData,
+      });
+    } catch {
+      // No crítico — el plan de activación se puede seguir rellenando a mano igual que siempre.
+    }
 
     return NextResponse.json(outcome);
   } catch (error) {
