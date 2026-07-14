@@ -10,14 +10,15 @@ interface LifecycleActionsProps {
   proposalId: string;
   approvedAt: string | null;
   finalizedAt: string | null;
+  isViewer?: boolean;
 }
 
-export function LifecycleActions({ proposalId, approvedAt, finalizedAt }: LifecycleActionsProps) {
+export function LifecycleActions({ proposalId, approvedAt, finalizedAt, isViewer }: LifecycleActionsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!approvedAt || finalizedAt) return null;
+  if (!approvedAt || finalizedAt || isViewer) return null;
 
   async function handleFinalize() {
     setLoading(true);
