@@ -54,8 +54,9 @@ export interface ActivationSuggestionResult {
 }
 
 export interface AIProvider {
-  /** Agente 1 — Extracción: lee un documento y devuelve datos estructurados. */
-  extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>>;
+  /** Agente 1 — Extracción: lee uno o varios archivos (ej. un dossier convertido a varias
+   *  imágenes, una por página) y devuelve datos estructurados combinando todos. */
+  extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>>;
 
   /** Agente 2 — Evaluation: puntúa cada atributo del catálogo de scoring. */
   scoreAttributes(
