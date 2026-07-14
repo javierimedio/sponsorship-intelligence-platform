@@ -16,6 +16,7 @@ import { InsightCard } from '@/components/insight-card';
 import { EmptyState } from '@/components/empty-state';
 import { InlineEditable } from '@/components/inline-editable';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
+import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { computeGlobalRiskScore, getTone, getWorkspaceStage } from '@/lib/workspace-stage';
 import { generateExecutiveSummary, generateStrengthsAndWeaknesses } from '@/lib/executive-summary';
 import { LifecycleActions } from './lifecycle-actions';
@@ -47,6 +48,8 @@ const DOCUMENT_TYPE_ORDER = ['original', 'dossier', 'email', 'image', 'ai_genera
 
 export default async function ProposalWorkspacePage({ params }: PageProps) {
   const supabase = createSupabaseServerClient();
+  const currentProfile = await getCurrentProfile(supabase);
+  const isViewer = currentProfile?.appRole === 'viewer';
 
   const { data: proposal } = await supabase.from('proposals').select('*, brands(name)').eq('id', params.id).maybeSingle();
 
@@ -139,7 +142,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
 
   const stage = getWorkspaceStage(proposal);
   const tone = getTone({ totalScore: proposal.total_score, overallRiskLevel: proposal.overall_risk_level });
-  const canEdit = !proposal.submitted_at; // permiso real — igual que /edit, no solo "stage === draft"
+  const canEdit = !proposal.submitted_at && !isViewer; // permiso real — igual que /edit, no solo "stage === draft"
 
   const missingFields = REQUIRED_EXTRACTION_FIELDS.filter(
     (f) => !extractedJson || extractedJson[f.key] === null || extractedJson[f.key] === undefined || extractedJson[f.key] === '',
@@ -305,7 +308,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
               ✏️ Editar
             </Link>
           )}
-          <LifecycleActions proposalId={proposal.id} approvedAt={proposal.approved_at} finalizedAt={proposal.finalized_at} />
+          <LifecycleActions proposalId={proposal.id} approvedAt={proposal.approved_at} finalizedAt={proposal.finalized_at} isViewer={isViewer} />
         </div>
       </div>
 
@@ -327,6 +330,7 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
         overallRiskLevel={proposal.overall_risk_level}
         roi={roi}
         recommendation={proposal.recommendation}
+        isViewer={isViewer}
       />
 
       <div className="card">
