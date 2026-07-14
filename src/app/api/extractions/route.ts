@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let buffer = Buffer.from(await fileBlob.arrayBuffer());
+    let buffer: Buffer = Buffer.from(await fileBlob.arrayBuffer());
     const mediaType = inferMediaType(doc.storage_path);
 
     // Comprime cada imagen antes de mandarla a la IA — un dossier convertido página por
