@@ -6,15 +6,16 @@ import { usePathname } from 'next/navigation';
 
 interface TopNavProps {
   showUsersLink?: boolean;
+  isViewer?: boolean;
 }
 
-export function TopNav({ showUsersLink }: TopNavProps) {
+export function TopNav({ showUsersLink, isViewer }: TopNavProps) {
   const pathname = usePathname();
 
   const items = [
     { href: '/', label: 'Dashboard' },
     { href: '/proposals', label: 'Propuestas' },
-    { href: '/intake', label: 'Nueva propuesta' },
+    ...(isViewer ? [] : [{ href: '/intake', label: 'Nueva propuesta' }]),
     ...(showUsersLink ? [{ href: '/users', label: 'Usuarios' }] : []),
   ];
 
