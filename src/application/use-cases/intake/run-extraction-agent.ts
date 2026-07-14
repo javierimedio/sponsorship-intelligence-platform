@@ -9,13 +9,12 @@ export interface RunExtractionAgentInput {
   organizationId: OrganizationId;
   proposalId: ProposalId;
   documentId: DocumentId | null;
-  fileBuffer: Buffer;
-  mediaType: string;
+  files: { buffer: Buffer; mediaType: string }[];
+  /** Nombre del proveedor realmente usado (ej. 'openai', 'anthropic', 'gemini') — antes
+   *  quedaba fijo a 'claude-sonnet-5' aunque se usara otro proveedor, dato incorrecto en
+   *  el Historial de cambios. */
+  providerName: string;
 }
-
-// Fijo por ahora — cuando conectemos el catálogo `ai_agents` del Documento 3,
-// esto se sustituye por una fila configurable en base de datos.
-const MODEL_USED = 'claude-sonnet-5';
 
 export class RunExtractionAgentUseCase {
   constructor(
@@ -25,14 +24,14 @@ export class RunExtractionAgentUseCase {
   ) {}
 
   async execute(input: RunExtractionAgentInput): Promise<Record<string, unknown>> {
-    const extractedJson = await this.aiProvider.extractProposalData(input.fileBuffer, input.mediaType);
+    const extractedJson = await this.aiProvider.extractProposalData(input.files);
 
     await this.extractionRepository.save({
       tenantId: input.tenantId,
       organizationId: input.organizationId,
       proposalId: input.proposalId,
       documentId: input.documentId,
-      modelUsed: MODEL_USED,
+      modelUsed: input.providerName,
       extractedJson,
       status: 'completed',
     });
