@@ -36,6 +36,23 @@ export interface EconomicConceptResult {
   estimatedAmount: number | null;
 }
 
+export interface ActivationCatalogItemInput {
+  id: string;
+  area: string;
+  name: string;
+}
+export interface ChannelInput {
+  id: string;
+  name: string;
+}
+export interface ActivationSuggestionResult {
+  activationCatalogItemId: string;
+  channelId: string | null;
+  objective: string | null;
+  description: string | null;
+  priority: 'Alta' | 'Media' | 'Baja';
+}
+
 export interface AIProvider {
   /** Agente 1 — Extracción: lee un documento y devuelve datos estructurados. */
   extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>>;
@@ -51,6 +68,15 @@ export interface AIProvider {
     extractedData: Record<string, unknown>,
     factors: RiskFactorInput[],
   ): Promise<RiskFactorResult[]>;
+
+  /** Agente 4 — Activación: sugiere qué acciones del catálogo cerrado encajan con esta
+   *  colaboración concreta. Nunca inventa una acción fuera de catálogo, y puede (y debe)
+   *  sugerir menos acciones que el catálogo completo si no todas aplican. */
+  suggestActivations(
+    extractedData: Record<string, unknown>,
+    catalogItems: ActivationCatalogItemInput[],
+    channels: ChannelInput[],
+  ): Promise<ActivationSuggestionResult[]>;
 
   /** Agente 5 — ROI/Financials: estima el importe de cada concepto económico del catálogo. */
   extractFinancialLines(
