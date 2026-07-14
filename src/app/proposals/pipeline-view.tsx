@@ -72,7 +72,15 @@ function daysSince(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function PipelineView({ proposals, initialStageFilter }: { proposals: PipelineProposal[]; initialStageFilter?: string }) {
+export function PipelineView({
+  proposals,
+  initialStageFilter,
+  isViewer,
+}: {
+  proposals: PipelineProposal[];
+  initialStageFilter?: string;
+  isViewer?: boolean;
+}) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<string>(initialStageFilter ?? 'all');
@@ -226,8 +234,8 @@ export function PipelineView({ proposals, initialStageFilter }: { proposals: Pip
           <EmptyState message="Ninguna propuesta coincide con estos filtros." />
         ) : (
           filtered.map((p) => {
-            const canDecide = p.stage === 'evaluated';
-            const canArchive = p.stage !== 'archived';
+            const canDecide = p.stage === 'evaluated' && !isViewer;
+            const canArchive = p.stage !== 'archived' && !isViewer;
             return (
               <div key={p.id} className="pipeline-card">
                 <input type="checkbox" checked={compareIds.has(p.id)} onChange={() => toggleCompare(p.id)} title="Seleccionar para comparar" />
