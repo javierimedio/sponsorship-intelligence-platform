@@ -255,7 +255,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {/* Pregunta 3: ¿Cuál necesita mi aprobación? */}
         <div className="card" style={{ flex: 1 }}>
           <div className="card-title">
@@ -301,7 +301,7 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
         {/* Pregunta 4: ¿Qué colaboraciones están funcionando? */}
         <div className="card" style={{ flex: 1 }}>
           <div className="card-title">En ejecución ({inExecution.length})</div>
