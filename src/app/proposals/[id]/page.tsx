@@ -640,6 +640,9 @@ export default async function ProposalWorkspacePage({ params }: PageProps) {
           <div>
             <div className="stat-label">ROI</div>
             <div className="stat-value" style={{ fontSize: 20 }}>{roi !== null ? `${roi.toFixed(1)}x` : '—'}</div>
+            {roi !== null && (
+              <div style={{ fontSize: 11, color: 'var(--c-mid)' }}>Por cada 1€ invertido, se prevén {roi.toFixed(2)}€ de retorno</div>
+            )}
           </div>
           <div>
             <div className="stat-label">Desviación</div>
