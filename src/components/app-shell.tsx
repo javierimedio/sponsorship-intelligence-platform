@@ -15,6 +15,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   let displayName: string | null = null;
   let isOrgAdmin = false;
+  let isViewer = false;
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -23,6 +24,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       .maybeSingle();
     displayName = profile?.full_name ?? null;
     isOrgAdmin = profile?.role === 'org_admin';
+    isViewer = profile?.role === 'viewer';
   }
 
   return (
@@ -56,7 +58,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           />
         </div>
 
-        <TopNav showUsersLink={isOrgAdmin} />
+        <TopNav showUsersLink={isOrgAdmin} isViewer={isViewer} />
 
         <div className="topbar-right">
           {user && (
