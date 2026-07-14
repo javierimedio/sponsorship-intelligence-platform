@@ -21,6 +21,15 @@ export default async function IntakePage() {
     );
   }
 
+  if (profile.appRole === 'viewer') {
+    return (
+      <AppShell>
+        <h1>Nueva propuesta</h1>
+        <p style={{ color: 'var(--c-mid)' }}>Tu rol (Visitante) no permite crear propuestas nuevas.</p>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <h1>Nueva propuesta</h1>
