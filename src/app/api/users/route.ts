@@ -9,7 +9,7 @@ import { createSupabaseServerClient } from '@/infrastructure/supabase/server-cli
 import { createSupabaseAdminClient } from '@/infrastructure/supabase/admin-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 
-const ALLOWED_ROLES = ['org_admin', 'evaluator'];
+const ALLOWED_ROLES = ['org_admin', 'evaluator', 'viewer'];
 
 export async function GET() {
   const supabase = createSupabaseServerClient();
