@@ -88,6 +88,10 @@ export class AnthropicProvider implements AIProvider {
     const system =
       'Eres el Agente de Evaluación de una plataforma de gestión de patrocinios. ' +
       'Para cada atributo de la lista, puntúa entre 0 y su maxScore según la información extraída. ' +
+      'IMPORTANTE: si el documento no aporta evidencia suficiente sobre un atributo concreto, ' +
+      'puntúa con un valor cercano a 0 en vez de asumir un valor intermedio "razonable" — no ' +
+      'inventes ni asumas datos que no estén en el texto. Justifica cada puntuación en el ' +
+      '"rationale" citando qué parte del documento la sustenta. ' +
       'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
       '{"attributeId": string, "score": number, "rationale": string}. ' +
       'El "score" nunca debe superar el "maxScore" indicado para ese atributo.';
@@ -106,6 +110,11 @@ export class AnthropicProvider implements AIProvider {
       'Eres el Agente de Riesgo de una plataforma de gestión de patrocinios. ' +
       'Para cada factor de riesgo de la lista, evalúa su "level" (probabilidad) e "impact" ' +
       '(gravedad) según la información extraída, usando SOLO "Alto", "Medio" o "Bajo". ' +
+      'IMPORTANTE: si el documento no menciona ninguna evidencia textual concreta relacionada ' +
+      'con un factor, marca ese factor como "Bajo"/"Bajo" por defecto — nunca asignes un nivel ' +
+      'superior a "Bajo" sin poder señalar qué frase del documento lo justifica. No inventes ' +
+      'riesgos por prudencia ni por parecer exhaustivo: la ausencia de mención de un riesgo no ' +
+      'es evidencia de ese riesgo. ' +
       'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
       '{"factorId": string, "level": "Alto"|"Medio"|"Bajo", "impact": "Alto"|"Medio"|"Bajo"}.';
 
