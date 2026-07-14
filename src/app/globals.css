@@ -116,10 +116,9 @@ h1, h2, h3 {
   color: rgba(255, 255, 255, .78);
 }
 
-/* ── RESPONSIVE: la topbar nunca debe forzar scroll horizontal de toda la página ── */
-html, body {
-  overflow-x: hidden;
-}
+/* ── RESPONSIVE: evitar scroll horizontal sin romper el "position: sticky" de la
+   topbar — por eso NO se pone overflow-x en html/body (rompería el sticky en varios
+   navegadores), se pone en el contenedor de contenido, que no es ancestro de .topbar. */
 @media (max-width: 860px) {
   .topbar {
     padding: 0 .75rem;
@@ -154,6 +153,7 @@ html, body {
   max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
+  overflow-x: hidden; /* protección de scroll horizontal — no afecta a .topbar (sticky) porque son hermanos, no ancestro/descendiente */
 }
 
 /* ── CARD ── */
