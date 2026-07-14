@@ -1,6 +1,7 @@
 // src/app/api/extractions/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { SupabaseAiExtractionRepository } from '@/infrastructure/supabase/ai-extraction-repository';
@@ -61,7 +62,28 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
-    files.push({ buffer: Buffer.from(await fileBlob.arrayBuffer()), mediaType: inferMediaType(doc.storage_path) });
+
+    let buffer = Buffer.from(await fileBlob.arrayBuffer());
+    const mediaType = inferMediaType(doc.storage_path);
+
+    // Comprime cada imagen antes de mandarla a la IA — un dossier convertido página por
+    // página a JPGs a resolución de escaneo puede agotar el límite de tokens por minuto
+    // de la cuenta en una sola llamada (visto en producción: 10 imágenes → 429 rate limit).
+    // 1568px es el ancho máximo que recomienda Anthropic para el mejor equilibrio
+    // calidad/coste — reutilizamos el mismo criterio para los tres proveedores.
+    if (mediaType !== 'application/pdf') {
+      try {
+        buffer = await sharp(buffer)
+          .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toBuffer();
+      } catch {
+        // Si sharp no puede procesar el archivo (formato raro, corrupto...), se envía tal
+        // cual en vez de bloquear toda la extracción por un solo archivo.
+      }
+    }
+
+    files.push({ buffer, mediaType: mediaType !== 'application/pdf' ? 'image/jpeg' : mediaType });
   }
 
   const useCase = new RunExtractionAgentUseCase(
