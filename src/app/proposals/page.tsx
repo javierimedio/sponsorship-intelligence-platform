@@ -50,20 +50,23 @@ export default async function ProposalsPage({ searchParams }: PageProps) {
   }));
 
   const initialStageFilter = searchParams.estado === 'pendiente' ? 'pending' : undefined;
+  const isViewer = profile.appRole === 'viewer';
 
   return (
     <AppShell>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ margin: 0 }}>Propuestas</h1>
-        <Link href="/intake" className="btn btn-amber">
-          + Nueva propuesta
-        </Link>
+        {!isViewer && (
+          <Link href="/intake" className="btn btn-amber">
+            + Nueva propuesta
+          </Link>
+        )}
       </div>
 
       {error ? (
         <p style={{ color: 'crimson' }}>{error.message}</p>
       ) : (
-        <PipelineView proposals={pipelineData} initialStageFilter={initialStageFilter} />
+        <PipelineView proposals={pipelineData} initialStageFilter={initialStageFilter} isViewer={isViewer} />
       )}
     </AppShell>
   );
