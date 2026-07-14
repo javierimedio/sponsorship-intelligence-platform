@@ -644,8 +644,8 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
 
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-              Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa...). El primero se
-              usará para la extracción automática si aplica; el resto quedan adjuntos como referencia.
+              Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa, o un dossier en PDF
+              convertido página por página a varias imágenes). Todos se usan juntos para la extracción automática si aplica.
             </label>
 
             <div
@@ -712,7 +712,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
                 {files.map((f, i) => (
                   <li key={`${f.name}_${f.size}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
                     <span>
-                      {f.name} {i === 0 ? <strong style={{ color: 'var(--c-dark)' }}>(principal, para extracción)</strong> : ''}
+                      {f.name}
                     </span>
                     <button
                       type="button"
