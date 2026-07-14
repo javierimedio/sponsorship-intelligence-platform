@@ -28,12 +28,12 @@ function getModel(systemInstruction: string) {
 async function askGeminiForJson(
   systemInstruction: string,
   userText: string,
-  file?: { buffer: Buffer; mediaType: string },
+  files?: { buffer: Buffer; mediaType: string }[],
 ): Promise<unknown> {
   const model = getModel(systemInstruction);
 
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-  if (file) {
+  for (const file of files ?? []) {
     parts.push({ inlineData: { mimeType: file.mediaType, data: file.buffer.toString('base64') } });
   }
   parts.push({ text: userText });
@@ -50,9 +50,12 @@ async function askGeminiForJson(
 }
 
 export class GeminiProvider implements AIProvider {
-  async extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>> {
+  async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
+      'Puede que recibas varios archivos (por ejemplo, un dossier convertido página por ' +
+      'página a varias imágenes) — léelos TODOS como un único documento combinado, no solo ' +
+      'el primero. ' +
       'Lee el documento y devuelve ÚNICAMENTE un objeto JSON (sin texto adicional, sin markdown) ' +
       'con esta forma exacta: {"requester_name": string|null, "requester_org": string|null, ' +
       '"collaboration_type": string|null, "summary": string, "assets_offered": string[], ' +
@@ -63,8 +66,8 @@ export class GeminiProvider implements AIProvider {
 
     const result = await askGeminiForJson(
       system,
-      'Extrae la información de este documento de propuesta de colaboración.',
-      { buffer: fileBuffer, mediaType },
+      'Extrae la información de este documento de propuesta de colaboración (puede venir en varios archivos).',
+      files,
     );
     return result as Record<string, unknown>;
   }
