@@ -70,6 +70,7 @@ export function NewUserForm() {
         <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: '100%', padding: 6 }}>
           <option value="evaluator">Evaluador (uso normal de la herramienta)</option>
           <option value="org_admin">Administrador (puede crear más usuarios)</option>
+          <option value="viewer">Visitante (solo puede ver, no puede editar nada)</option>
         </select>
       </div>
       <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
