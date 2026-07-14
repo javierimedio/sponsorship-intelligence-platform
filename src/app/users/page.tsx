@@ -4,6 +4,7 @@ import { AppShell } from '@/components/app-shell';
 import { createSupabaseServerClient } from '@/infrastructure/supabase/server-client';
 import { getCurrentProfile } from '@/infrastructure/supabase/current-profile';
 import { NewUserForm } from './new-user-form';
+import { UsersTable } from './users-table';
 
 export default async function UsersPage() {
   const supabase = createSupabaseServerClient();
@@ -48,28 +49,7 @@ export default async function UsersPage() {
         <div className="card-title" style={{ padding: '1.5rem 1.5rem 0' }}>
           Equipo ({users?.length ?? 0})
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Email</th>
-              <th>Rol</th>
-              <th>Alta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(users ?? []).map((u) => (
-              <tr key={u.id}>
-                <td>{u.full_name ?? '—'}</td>
-                <td>{u.email ?? '—'}</td>
-                <td>{u.role === 'org_admin' ? 'Administrador' : 'Evaluador'}</td>
-                <td style={{ color: 'var(--c-mid)', fontSize: 12 }}>
-                  {new Date(u.created_at).toLocaleDateString('es-ES')}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <UsersTable initialUsers={users ?? []} currentUserId={profile.userId} />
       </div>
     </AppShell>
   );
