@@ -28,28 +28,41 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const proposalId = typeof body?.proposalId === 'string' ? body.proposalId : '';
   const documentId = typeof body?.documentId === 'string' ? body.documentId : '';
-  const storagePath = typeof body?.storagePath === 'string' ? body.storagePath : '';
   const provider = typeof body?.provider === 'string' ? body.provider : undefined;
 
-  if (!proposalId || !storagePath) {
-    return NextResponse.json({ error: 'proposalId y storagePath son obligatorios.' }, { status: 400 });
+  if (!proposalId) {
+    return NextResponse.json({ error: 'proposalId es obligatorio.' }, { status: 400 });
   }
 
-  // Descarga el archivo real de Storage con la sesión del propio usuario — la RLS de
-  // storage.objects ya exige que el primer segmento de la ruta sea su organization_id.
-  const { data: fileBlob, error: downloadError } = await supabase.storage
+  // Antes solo se descargaba el archivo "principal" — si un dossier en PDF se convertía a
+  // varias imágenes (una por página) y la primera era la portada, la IA se quedaba sin
+  // nada útil que leer. Ahora se descargan TODOS los documentos-fuente de la propuesta
+  // (se excluyen los generados por la propia IA, que son salida, no entrada) y se pasan
+  // todos juntos al proveedor.
+  const { data: sourceDocuments, error: docsError } = await supabase
     .from('documents')
-    .download(storagePath);
+    .select('storage_path, document_type')
+    .eq('proposal_id', proposalId)
+    .neq('document_type', 'ai_generated');
 
-  if (downloadError || !fileBlob) {
-    return NextResponse.json(
-      { error: `No se pudo descargar el documento: ${downloadError?.message ?? 'desconocido'}` },
-      { status: 500 },
-    );
+  if (docsError) {
+    return NextResponse.json({ error: `No se pudieron listar los documentos: ${docsError.message}` }, { status: 500 });
+  }
+  if (!sourceDocuments?.length) {
+    return NextResponse.json({ error: 'Esta propuesta no tiene ningún documento adjunto todavía.' }, { status: 400 });
   }
 
-  const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
-  const mediaType = inferMediaType(storagePath);
+  const files: { buffer: Buffer; mediaType: string }[] = [];
+  for (const doc of sourceDocuments) {
+    const { data: fileBlob, error: downloadError } = await supabase.storage.from('documents').download(doc.storage_path);
+    if (downloadError || !fileBlob) {
+      return NextResponse.json(
+        { error: `No se pudo descargar "${doc.storage_path}": ${downloadError?.message ?? 'desconocido'}` },
+        { status: 500 },
+      );
+    }
+    files.push({ buffer: Buffer.from(await fileBlob.arrayBuffer()), mediaType: inferMediaType(doc.storage_path) });
+  }
 
   const useCase = new RunExtractionAgentUseCase(
     new SupabaseAiExtractionRepository(supabase),
@@ -63,8 +76,8 @@ export async function POST(request: NextRequest) {
       organizationId: profile.organizationId,
       proposalId: asProposalId(proposalId),
       documentId: documentId ? asDocumentId(documentId) : null,
-      fileBuffer,
-      mediaType,
+      files,
+      providerName: (provider ?? process.env.AI_PROVIDER ?? 'gemini').toLowerCase(),
     });
 
     return NextResponse.json({ extractedJson });
