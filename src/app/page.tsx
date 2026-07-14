@@ -217,7 +217,12 @@ export default async function DashboardPage() {
         <KPICard label="Score medio" value={avgScore !== null ? `${Math.round(avgScore * 100)}%` : '—'} />
         <KPICard label="Riesgos altos abiertos" value={openHighRisks} tone={openHighRisks > 0 ? 'negative' : 'neutral'} />
         <KPICard label="Presupuesto comprometido" value={`${totalBudget.toLocaleString('es-ES')} €`} />
-        <KPICard label="ROI previsto" value={roiForecast !== null ? `${roiForecast.toFixed(1)}x` : '—'} tone="positive" />
+        <KPICard
+          label="ROI previsto"
+          value={roiForecast !== null ? `${roiForecast.toFixed(1)}x` : '—'}
+          tone="positive"
+          hint={roiForecast !== null ? `Por cada 1€ invertido, se prevén ${roiForecast.toFixed(2)}€ de retorno` : undefined}
+        />
         <KPICard label="Activaciones en curso" value={activationsInProgress?.length ?? 0} />
       </div>
 
