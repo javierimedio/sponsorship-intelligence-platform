@@ -17,6 +17,7 @@ interface DecisionStripProps {
   overallRiskLevel: string | null;
   roi: number | null;
   recommendation: string | null;
+  isViewer?: boolean;
 }
 
 const TONE_STYLE: Record<Tone, { bg: string; fg: string }> = {
@@ -35,7 +36,7 @@ const STAGE_LABEL: Record<WorkspaceStage, string> = {
   archived: 'Archivada',
 };
 
-export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRiskLevel, roi, recommendation }: DecisionStripProps) {
+export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRiskLevel, roi, recommendation, isViewer }: DecisionStripProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
     }
   }
 
-  const canDecide = stage === 'evaluated'; // solo se puede aprobar/rechazar/pedir revisión estando Evaluada
+  const canDecide = stage === 'evaluated' && !isViewer; // solo se puede aprobar/rechazar/pedir revisión estando Evaluada
 
   return (
     <div className="decision-strip decision-strip-sticky" style={{ background: bg, color: fg, padding: '.85rem 1.25rem', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
@@ -96,43 +97,45 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
           <Metric label="Recomendación" value={recommendation ?? '—'} />
         </div>
 
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            onClick={() => router.refresh()}
-            className="btn btn-outline"
-            style={{ padding: '.4rem .8rem', fontSize: 12 }}
-          >
-            Guardar
-          </button>
-          {canDecide && (
-            <>
-              <button
-                onClick={() => run('request-review', 'review')}
-                disabled={loading !== null}
-                className="btn btn-outline"
-                style={{ padding: '.4rem .8rem', fontSize: 12 }}
-              >
-                {loading === 'review' ? '...' : 'Solicitar revisión'}
-              </button>
-              <button
-                onClick={() => setRejectDialogOpen(true)}
-                disabled={loading !== null}
-                className="btn btn-outline"
-                style={{ padding: '.4rem .8rem', fontSize: 12, color: 'var(--c-red)', borderColor: 'var(--c-red)' }}
-              >
-                Rechazar
-              </button>
-              <button
-                onClick={() => run('approve', 'approve')}
-                disabled={loading !== null}
-                className="btn btn-amber"
-                style={{ padding: '.4rem .8rem', fontSize: 12 }}
-              >
-                {loading === 'approve' ? '...' : 'Aprobar'}
-              </button>
-            </>
-          )}
-        </div>
+        {!isViewer && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => router.refresh()}
+              className="btn btn-outline"
+              style={{ padding: '.4rem .8rem', fontSize: 12 }}
+            >
+              Guardar
+            </button>
+            {canDecide && (
+              <>
+                <button
+                  onClick={() => run('request-review', 'review')}
+                  disabled={loading !== null}
+                  className="btn btn-outline"
+                  style={{ padding: '.4rem .8rem', fontSize: 12 }}
+                >
+                  {loading === 'review' ? '...' : 'Solicitar revisión'}
+                </button>
+                <button
+                  onClick={() => setRejectDialogOpen(true)}
+                  disabled={loading !== null}
+                  className="btn btn-outline"
+                  style={{ padding: '.4rem .8rem', fontSize: 12, color: 'var(--c-red)', borderColor: 'var(--c-red)' }}
+                >
+                  Rechazar
+                </button>
+                <button
+                  onClick={() => run('approve', 'approve')}
+                  disabled={loading !== null}
+                  className="btn btn-amber"
+                  style={{ padding: '.4rem .8rem', fontSize: 12 }}
+                >
+                  {loading === 'approve' ? '...' : 'Aprobar'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {error && <p style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{error}</p>}
 
