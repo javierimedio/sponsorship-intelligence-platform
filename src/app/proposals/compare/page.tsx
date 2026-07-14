@@ -96,7 +96,11 @@ export default async function ComparePage({ searchParams }: PageProps) {
             </tr>
             <tr>
               <td>ROI</td>
-              {rows.map((r) => <td key={r.id}>{r.roi !== null ? `${r.roi.toFixed(1)}x` : '—'}</td>)}
+              {rows.map((r) => (
+                <td key={r.id} title={r.roi !== null ? `Por cada 1€ invertido, se prevén ${r.roi.toFixed(2)}€ de retorno` : undefined}>
+                  {r.roi !== null ? `${r.roi.toFixed(1)}x` : '—'}
+                </td>
+              ))}
             </tr>
             <tr>
               <td>Benchmark (percentil)</td>
