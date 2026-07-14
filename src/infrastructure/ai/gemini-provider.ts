@@ -105,6 +105,12 @@ export class GeminiProvider implements AIProvider {
       'superior a "Bajo" sin poder señalar qué frase del documento lo justifica. No inventes ' +
       'riesgos por prudencia ni por parecer exhaustivo: la ausencia de mención de un riesgo no ' +
       'es evidencia de ese riesgo. ' +
+      'EXCEPCIÓN A LA REGLA ANTERIOR: hay factores que preguntan por la AUSENCIA de algo ' +
+      'positivo (por ejemplo "Sin reporting", "Sin métricas", "Sin tracking", "KPIs ambiguos", ' +
+      '"ROI incierto o difícil de medir"). Para ESOS factores, que el documento no mencione ' +
+      'ningún mecanismo de reporting/medición/KPI/cálculo de ROI SÍ es evidencia real del ' +
+      'riesgo — en ese caso marca un nivel alto, no "Bajo" por defecto. La regla de "sin ' +
+      'evidencia, Bajo" aplica a riesgos sobre la PRESENCIA de algo malo, no a estos. ' +
       'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
       '{"factorId": string, "level": "Alto"|"Medio"|"Bajo", "impact": "Alto"|"Medio"|"Bajo"}.';
 
