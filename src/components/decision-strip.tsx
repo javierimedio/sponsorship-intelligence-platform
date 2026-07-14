@@ -87,7 +87,11 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'baseline' }}>
           <Metric label="Score" value={totalScore !== null ? `${Math.round(totalScore * 100)}%` : '—'} />
           <Metric label="Riesgo" value={overallRiskLevel ?? '—'} />
-          <Metric label="ROI" value={roi !== null ? `${roi.toFixed(1)}x` : '—'} />
+          <Metric
+            label="ROI"
+            value={roi !== null ? `${roi.toFixed(1)}x` : '—'}
+            title={roi !== null ? `Por cada 1€ invertido, se prevén ${roi.toFixed(2)}€ de retorno` : undefined}
+          />
           <Metric label="Estado" value={STAGE_LABEL[stage]} />
           <Metric label="Recomendación" value={recommendation ?? '—'} />
         </div>
@@ -142,9 +146,9 @@ export function DecisionStrip({ proposalId, stage, tone, totalScore, overallRisk
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div>
+    <div title={title}>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', opacity: 0.7 }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 700 }}>{value}</div>
     </div>
