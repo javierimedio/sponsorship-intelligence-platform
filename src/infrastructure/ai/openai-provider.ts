@@ -25,28 +25,29 @@ function getClient(): OpenAI {
 async function askOpenAiForJson(
   system: string,
   userText: string,
-  file?: { buffer: Buffer; mediaType: string },
+  files?: { buffer: Buffer; mediaType: string }[],
 ): Promise<unknown> {
   const client = getClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const content: any[] = [];
+  const allFiles = files ?? [];
+  const imageFiles = allFiles.filter((f) => f.mediaType !== 'application/pdf');
+  const hasPdf = allFiles.some((f) => f.mediaType === 'application/pdf');
 
-  if (file) {
-    if (file.mediaType === 'application/pdf') {
-      // La API de Chat Completions de OpenAI no acepta PDFs directamente como input_file
-      // en este endpoint — se envía como archivo adjunto vía Files API en una iteración
-      // futura. Por ahora, para PDFs, avisamos con un error claro en vez de fallar en silencio.
-      throw new Error(
-        'El adapter de OpenAI todavía no soporta PDF directamente. Usa una imagen (PNG/JPG) ' +
-          'o cambia AI_PROVIDER a "anthropic"/"gemini" para documentos PDF.',
-      );
-    }
-    content.push({
-      type: 'image_url',
-      image_url: { url: `data:${file.mediaType};base64,${file.buffer.toString('base64')}` },
-    });
+  if (hasPdf && !imageFiles.length) {
+    // La API de Chat Completions de OpenAI no acepta PDFs directamente en este endpoint.
+    // Si además hay imágenes disponibles, se ignoran los PDF y se usan esas — solo se
+    // avisa con error cuando NO queda ninguna imagen utilizable.
+    throw new Error(
+      'El adapter de OpenAI todavía no soporta PDF directamente. Usa una imagen (PNG/JPG) ' +
+        'o cambia AI_PROVIDER a "anthropic"/"gemini" para documentos PDF.',
+    );
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const content: any[] = imageFiles.map((file) => ({
+    type: 'image_url',
+    image_url: { url: `data:${file.mediaType};base64,${file.buffer.toString('base64')}` },
+  }));
   content.push({ type: 'text', text: userText });
 
   const response = await client.chat.completions.create({
@@ -69,9 +70,12 @@ async function askOpenAiForJson(
 }
 
 export class OpenAiProvider implements AIProvider {
-  async extractProposalData(fileBuffer: Buffer, mediaType: string): Promise<Record<string, unknown>> {
+  async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
+      'Puede que recibas varios archivos (por ejemplo, un dossier convertido página por ' +
+      'página a varias imágenes) — léelos TODOS como un único documento combinado, no solo ' +
+      'el primero. ' +
       'Lee el documento y devuelve ÚNICAMENTE un objeto JSON con esta forma exacta: ' +
       '{"requester_name": string|null, "requester_org": string|null, ' +
       '"collaboration_type": string|null, "summary": string, "assets_offered": string[], ' +
@@ -82,8 +86,8 @@ export class OpenAiProvider implements AIProvider {
 
     const result = await askOpenAiForJson(
       system,
-      'Extrae la información de este documento de propuesta de colaboración.',
-      { buffer: fileBuffer, mediaType },
+      'Extrae la información de este documento de propuesta de colaboración (puede venir en varios archivos).',
+      files,
     );
     return result as Record<string, unknown>;
   }
