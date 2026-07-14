@@ -122,6 +122,33 @@ export class AnthropicProvider implements AIProvider {
     return Array.isArray(result) ? (result as RiskFactorResult[]) : [];
   }
 
+  async suggestActivations(
+    extractedData: Record<string, unknown>,
+    catalogItems: import('../../domain/shared/ai-provider').ActivationCatalogItemInput[],
+    channels: import('../../domain/shared/ai-provider').ChannelInput[],
+  ): Promise<import('../../domain/shared/ai-provider').ActivationSuggestionResult[]> {
+    if (!catalogItems.length) return [];
+
+    const system =
+      'Eres el Agente de Activación de una plataforma de gestión de patrocinios. ' +
+      'A partir de los datos extraídos del documento, sugiere qué acciones del CATÁLOGO ' +
+      'CERRADO que se te da tienen sentido para esta colaboración concreta. ' +
+      'IMPORTANTE: nunca inventes una acción que no esté en el catálogo. No sugieras todas ' +
+      'las acciones del catálogo por sistema — solo las que de verdad encajen con lo que dice ' +
+      'el documento (assets ofrecidos, tipo de colaboración, oportunidades mencionadas). Es ' +
+      'preferible sugerir pocas acciones bien justificadas que una lista larga genérica. Para ' +
+      'cada acción sugerida, asigna una prioridad ("Alta"|"Media"|"Baja") según su relevancia ' +
+      'real para esta colaboración, un canal del catálogo de canales si aplica claramente, y ' +
+      'un objetivo/descripción breves basados en lo que dice el documento — no en suposiciones. ' +
+      'Devuelve ÚNICAMENTE un array JSON (sin texto adicional, sin markdown) con objetos ' +
+      '{"activationCatalogItemId": string, "channelId": string|null, "objective": string|null, ' +
+      '"description": string|null, "priority": "Alta"|"Media"|"Baja"}.';
+
+    const result = await askClaudeForJson(system, JSON.stringify({ extractedData, catalogItems, channels }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return Array.isArray(result) ? (result as any[]) : [];
+  }
+
   async extractFinancialLines(
     extractedData: Record<string, unknown>,
     concepts: EconomicConceptInput[],
