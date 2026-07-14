@@ -65,7 +65,11 @@ export default async function ExecutiveReportPage({ params }: PageProps) {
         <div style={{ display: 'flex', gap: 32, marginBottom: 28 }}>
           <Stat label="Score" value={proposal.total_score !== null ? `${Math.round(proposal.total_score * 100)}%` : '—'} />
           <Stat label="Riesgo" value={proposal.overall_risk_level ?? '—'} />
-          <Stat label="ROI" value={roi !== null ? `${roi.toFixed(1)}x` : '—'} />
+          <Stat
+            label="ROI"
+            value={roi !== null ? `${roi.toFixed(1)}x` : '—'}
+            caption={roi !== null ? `${roi.toFixed(2)}€ de retorno por cada 1€ invertido` : undefined}
+          />
           <Stat label="Recomendación" value={proposal.recommendation ?? '—'} />
         </div>
 
@@ -127,11 +131,12 @@ export default async function ExecutiveReportPage({ params }: PageProps) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, caption }: { label: string; value: string; caption?: string }) {
   return (
     <div>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', color: '#888' }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
+      {caption && <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{caption}</div>}
     </div>
   );
 }
