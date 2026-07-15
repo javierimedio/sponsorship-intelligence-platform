@@ -89,6 +89,9 @@ export default async function EditProposalPage({ params }: PageProps) {
           facebook: extractedJson.social_facebook ?? '',
           instagram: extractedJson.social_instagram ?? '',
           youtube: extractedJson.social_youtube ?? '',
+          assetsOffered: Array.isArray(extractedJson.assets_offered) ? extractedJson.assets_offered.join('\n') : '',
+          opportunities: Array.isArray(extractedJson.opportunities) ? extractedJson.opportunities.join('\n') : '',
+          risks: Array.isArray(extractedJson.risks) ? extractedJson.risks.join('\n') : '',
         }
       : null,
     scores: Object.fromEntries((scores ?? []).map((s) => [s.scoring_attribute_id, String(s.score_value)])),
