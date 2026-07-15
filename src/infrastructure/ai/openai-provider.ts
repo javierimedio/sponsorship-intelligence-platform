@@ -104,7 +104,7 @@ export class OpenAiProvider implements AIProvider {
     const response = await client.responses.create({
       model: 'gpt-4o-mini',
       input: prompt,
-      tools: [{ type: 'web_search' }],
+      tools: [{ type: 'web_search_preview' }],
     });
 
     // El SDK expone un getter de conveniencia `output_text` que concatena el texto final;
