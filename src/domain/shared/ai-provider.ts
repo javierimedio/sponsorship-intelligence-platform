@@ -62,6 +62,19 @@ export interface WebEnrichmentInput {
   brandName: string | null;
 }
 
+export interface BrandStrategyInput {
+  brandName: string;
+  positioning: string | null;
+  idealCollaborations: string[] | null;
+  avoidCollaborations: string[] | null;
+  strategicPriorities: string[] | null;
+  evaluationBias: string | null;
+  decisionStyle: string | null;
+  /** Desglose real de propuestas ya evaluadas para esta marca, agrupado por tipo de
+   *  colaboración — puede estar vacío si todavía no hay histórico suficiente. */
+  historicalBreakdown: { collaborationType: string; count: number; avgScore: number }[];
+}
+
 export interface AIProvider {
   /** Agente 1 — Extracción: lee uno o varios archivos (ej. un dossier convertido a varias
    *  imágenes, una por página) y devuelve datos estructurados combinando todos. */
@@ -93,6 +106,12 @@ export interface AIProvider {
    *  persona lo revise y lo edite antes de guardarlo — igual de "no inventes" que el
    *  resto: si no encuentra nada fiable, debe decirlo, no rellenar con suposiciones. */
   enrichWithWebSearch(input: WebEnrichmentInput): Promise<string>;
+
+  /** Botón explícito "Generar recomendación estratégica" — combina el ADN de marca con el
+   *  histórico real de propuestas evaluadas (y búsqueda web si el proveedor la soporta) para
+   *  sugerir qué tipo de patrocinios/colaboraciones tienen sentido para esta marca. Nunca
+   *  inventa tipos de colaboración fuera de lo razonable a partir de ideal_collaborations. */
+  recommendForBrand(input: BrandStrategyInput): Promise<string>;
 
   /** Agente 5 — ROI/Financials: estima el importe de cada concepto económico del catálogo. */
   extractFinancialLines(
