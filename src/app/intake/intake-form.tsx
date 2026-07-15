@@ -225,7 +225,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
   const [manualYoutube, setManualYoutube] = useState(editing?.extraction?.youtube ?? '');
   const [manualAssetsOffered, setManualAssetsOffered] = useState(editing?.extraction?.assetsOffered ?? '');
   const [manualOpportunities, setManualOpportunities] = useState(editing?.extraction?.opportunities ?? '');
-  const [manualRisks, setManualRisks] = useState(editing?.extraction?.risks ?? '');
+  const [manualDetectedRisks, setManualDetectedRisks] = useState(editing?.extraction?.risks ?? '');
   const [manualWebEnrichment, setManualWebEnrichment] = useState('');
   const [enrichingWeb, setEnrichingWeb] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
@@ -549,7 +549,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
         estimated_total_amount: manualAmount ? Number(manualAmount) : null,
         currency: 'EUR',
         opportunities: toList(manualOpportunities),
-        risks: toList(manualRisks),
+        risks: toList(manualDetectedRisks),
         website: manualWebsite || null,
         social_facebook: manualFacebook || null,
         social_instagram: manualInstagram || null,
@@ -855,8 +855,8 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               Riesgos detectados en el documento <span style={{ fontWeight: 400, color: '#888' }}>(uno por línea, opcional)</span>
             </label>
             <textarea
-              value={manualRisks}
-              onChange={(e) => setManualRisks(e.target.value)}
+              value={manualDetectedRisks}
+              onChange={(e) => setManualDetectedRisks(e.target.value)}
               rows={2}
               placeholder={'ej:\nSin exclusividad — puede vestir otras marcas de su club\nSin mecanismo de reporting de resultados definido'}
               style={{ width: '100%', padding: 6 }}
