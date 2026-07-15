@@ -466,34 +466,12 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
       }
 
       setDocumentId(primaryDocumentId);
-
-      if (selectedProvider === 'manual') {
-        setPhase('manual-extract');
-        return;
-      }
-
-      setPhase('extracting');
-      const extractionRes = await fetch('/api/extractions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposalId: proposal.id, documentId: primaryDocumentId, storagePath: primaryStoragePath, provider: selectedProvider }),
-      });
-      const extraction = await safeJson(extractionRes);
-      if (!extractionRes.ok) throw new Error(extraction.error ?? 'Error en la extracción.');
-      setExtractedSummary(typeof extraction.extractedJson?.summary === 'string' ? extraction.extractedJson.summary : null);
-
-      setPhase('evaluating');
-      const evaluationRes = await fetch('/api/evaluations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposalId: proposal.id, provider: selectedProvider }),
-      });
-      const evaluation = await safeJson(evaluationRes);
-      if (!evaluationRes.ok) throw new Error(evaluation.error ?? 'Error en la evaluación.');
-
-      setResult(evaluation);
-      setPhase('done');
-      setMessage(`Propuesta "${proposal.title}" extraída y evaluada con ${selectedProvider}. Sigue en Borrador hasta que la envíes.`);
+      // El Agente 1 (extracción) se hace siempre a mano — en la práctica fallaba mucho
+      // cuando el dossier no tenía la información muy clara o completa. La IA entra a
+      // partir del Agente 2 (scoring/riesgo/activación/financials), usando estos mismos
+      // datos que rellena la persona — el motor no distingue si vinieron de un humano o
+      // de un agente, así que no hace falta ningún cambio en el resto del flujo.
+      setPhase('manual-extract');
     } catch (error) {
       setPhase('error');
       setMessage((error as Error).message);
@@ -542,6 +520,24 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar la extracción manual.');
 
       setExtractedSummary(manualSummary || null);
+
+      if (selectedProvider !== 'manual') {
+        // Agentes 2-5 con IA, usando los datos que se acaban de rellenar a mano — el
+        // motor de evaluación no distingue si extractedData vino de un agente o de aquí.
+        setPhase('evaluating');
+        const evaluationRes = await fetch('/api/evaluations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposalId, provider: selectedProvider }),
+        });
+        const evaluation = await safeJson(evaluationRes);
+        if (!evaluationRes.ok) throw new Error(evaluation.error ?? 'Error en la evaluación.');
+
+        setResult(evaluation);
+        setPhase('done');
+        setMessage(`Extracción manual guardada. Evaluada con ${selectedProvider}. Sigue en Borrador hasta que la envíes.`);
+        return;
+      }
 
       const catalogRes = await fetch('/api/catalog');
       const catalogData = await safeJson(catalogRes);
@@ -627,7 +623,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Método de extracción</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Método de evaluación</label>
             <select value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)} disabled={loading} style={{ width: '100%', padding: 8 }}>
               {configuredProviders.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -636,16 +632,18 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               ))}
             </select>
             <p style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+              La extracción de datos del documento (Agente 1) siempre la haces tú, a mano — es donde más falla la IA
+              cuando el dossier no es muy claro.{' '}
               {selectedProvider === 'manual'
-                ? 'Introducirás tú los datos, sin llamar a ningún proveedor de IA.'
-                : `La IA leerá el documento con ${configuredProviders.find((p) => p.id === selectedProvider)?.label ?? selectedProvider}.`}
+                ? 'También introducirás tú el scoring, el riesgo y los financials.'
+                : `El scoring, el riesgo, la activación y los financials los calculará ${configuredProviders.find((p) => p.id === selectedProvider)?.label ?? selectedProvider} a partir de esos datos.`}
             </p>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-              Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa, o un dossier en PDF
-              convertido página por página a varias imágenes). Todos se usan juntos para la extracción automática si aplica.
+              Documentos (PDF/imagen) — puedes seleccionar varios (dossier, presentación, tarifa...). Sirven como
+              referencia y quedan adjuntos a la propuesta; los datos para evaluar los introduces tú en el siguiente paso.
             </label>
 
             <div
@@ -729,7 +727,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
           </div>
 
           <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
-            {loading ? PHASE_LABEL[phase] : selectedProvider === 'manual' ? 'Crear propuesta (Borrador) →' : 'Crear, extraer y evaluar'}
+            {loading ? PHASE_LABEL[phase] : 'Crear propuesta (Borrador) →'}
           </button>
         </form>
       ) : null}
@@ -804,7 +802,7 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
 
       {phase === 'manual-evaluate' && catalog && (
         <form onSubmit={handleManualEvaluationSubmit} style={{ marginTop: 20, padding: 16, border: '1px solid #ddd', borderRadius: 4 }}>
-          <h2 style={{ fontSize: 15, marginBottom: 12 }}>Evaluación manual (equivalente a los Agentes 2/3/5)</h2>
+          <h2 style={{ fontSize: 15, marginBottom: 12 }}>Evaluación manual (equivalente a los Agentes 2/3/4/5)</h2>
 
           <h3 style={{ fontSize: 13, marginTop: 16 }}>Scoring por atributo</h3>
           {catalog.scoringAttributes.map((a) => (
