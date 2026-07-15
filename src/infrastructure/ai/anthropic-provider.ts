@@ -65,6 +65,13 @@ async function askClaudeForJson(
 }
 
 export class AnthropicProvider implements AIProvider {
+  async enrichWithWebSearch(): Promise<string> {
+    // Anthropic sí soporta búsqueda web nativa (web_search_20250305) — pendiente de
+    // implementar y validar aquí. Se empezó por OpenAI porque es el único proveedor con
+    // facturación activa disponible para probarlo con casos reales.
+    throw new Error('El enriquecimiento con búsqueda web todavía no está implementado para Anthropic — usa OpenAI por ahora.');
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
