@@ -15,6 +15,7 @@ export function TopNav({ showUsersLink, isViewer }: TopNavProps) {
   const items = [
     { href: '/', label: 'Dashboard' },
     { href: '/proposals', label: 'Propuestas' },
+    { href: '/brands', label: 'Marcas' },
     ...(isViewer ? [] : [{ href: '/intake', label: 'Nueva propuesta' }]),
     ...(showUsersLink ? [{ href: '/users', label: 'Usuarios' }] : []),
   ];
