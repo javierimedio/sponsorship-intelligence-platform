@@ -70,6 +70,59 @@ async function askOpenAiForJson(
 }
 
 export class OpenAiProvider implements AIProvider {
+  async enrichWithWebSearch(input: import('../../domain/shared/ai-provider').WebEnrichmentInput): Promise<string> {
+    const client = getClient();
+
+    const facts = [
+      input.requesterName ? `Nombre/persona u organización solicitante: ${input.requesterName}` : null,
+      input.website ? `Web: ${input.website}` : null,
+      input.socialInstagram ? `Instagram: ${input.socialInstagram}` : null,
+      input.socialFacebook ? `Facebook: ${input.socialFacebook}` : null,
+      input.socialYoutube ? `YouTube: ${input.socialYoutube}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    if (!facts) return 'No hay ningún dato de partida (nombre, web o redes) con el que buscar información.';
+
+    const prompt =
+      'Eres el Agente de Enriquecimiento de una plataforma de gestión de patrocinios. ' +
+      'Busca en internet información pública y verificable sobre el solicitante/colaborador ' +
+      'descrito abajo, y crúzala con el encaje que podría tener con la marca indicada. ' +
+      'IMPORTANTE: no inventes datos que no encuentres — si la búsqueda no da resultados ' +
+      'fiables sobre algo, dilo explícitamente en vez de suponer. Cita de dónde sale cada dato ' +
+      'que aportes (qué página o red social lo confirma). ' +
+      'Responde en texto plano en español, en un párrafo o lista breve — nada de JSON. ' +
+      'Cubre, solo si encuentras datos reales: repercusión pública/número de seguidores, otras ' +
+      'colaboraciones o patrocinios conocidos, cualquier controversia pública relevante, y por ' +
+      'qué podría (o no) encajar con la marca indicada.\n\n' +
+      `Datos de partida:\n${facts}\n\n` +
+      `Marca interesada en el patrocinio: ${input.brandName ?? 'no especificada'}`;
+
+    // La Responses API (no la Chat Completions que usan el resto de agentes) es la que
+    // expone la herramienta de búsqueda web nativa de OpenAI.
+    const response = await client.responses.create({
+      model: 'gpt-4o-mini',
+      input: prompt,
+      tools: [{ type: 'web_search' }],
+    });
+
+    // El SDK expone un getter de conveniencia `output_text` que concatena el texto final;
+    // si no estuviera disponible en esta versión del SDK, se reconstruye a mano.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyResponse = response as any;
+    if (typeof anyResponse.output_text === 'string' && anyResponse.output_text.trim()) {
+      return anyResponse.output_text.trim();
+    }
+    const textParts: string[] = [];
+    for (const item of anyResponse.output ?? []) {
+      for (const part of item.content ?? []) {
+        if (typeof part.text === 'string') textParts.push(part.text);
+      }
+    }
+    return textParts.join('\n').trim() || 'La búsqueda no devolvió ningún resultado de texto.';
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
