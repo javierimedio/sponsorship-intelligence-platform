@@ -15,6 +15,12 @@ interface EditingExtraction {
   facebook: string;
   instagram: string;
   youtube: string;
+  /** Uno por línea en el textarea — se convierten a array al guardar. Sin estos, el
+   *  motor de evaluación (Agentes 2-5) apenas tiene con qué trabajar más allá del
+   *  resumen: "no se proporciona información" en casi todos los atributos y riesgos. */
+  assetsOffered: string;
+  opportunities: string;
+  risks: string;
 }
 
 export interface EditingData {
@@ -217,6 +223,12 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
   const [manualFacebook, setManualFacebook] = useState(editing?.extraction?.facebook ?? '');
   const [manualInstagram, setManualInstagram] = useState(editing?.extraction?.instagram ?? '');
   const [manualYoutube, setManualYoutube] = useState(editing?.extraction?.youtube ?? '');
+  const [manualAssetsOffered, setManualAssetsOffered] = useState(editing?.extraction?.assetsOffered ?? '');
+  const [manualOpportunities, setManualOpportunities] = useState(editing?.extraction?.opportunities ?? '');
+  const [manualRisks, setManualRisks] = useState(editing?.extraction?.risks ?? '');
+  const [manualWebEnrichment, setManualWebEnrichment] = useState('');
+  const [enrichingWeb, setEnrichingWeb] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
 
   // Formulario de evaluación manual: valores por id de catálogo
   const [manualScores, setManualScores] = useState<Record<string, string>>(editing?.scores ?? {});
@@ -478,6 +490,33 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
     }
   }
 
+  async function handleEnrichWithWeb() {
+    setEnrichingWeb(true);
+    setEnrichError(null);
+    try {
+      const brandName = brands?.find((b) => b.id === brandId)?.name ?? null;
+      const res = await fetch('/api/enrich-web', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requesterName: manualRequesterName,
+          website: manualWebsite,
+          socialInstagram: manualInstagram,
+          socialFacebook: manualFacebook,
+          socialYoutube: manualYoutube,
+          brandName,
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error ?? 'Error al buscar en internet.');
+      setManualWebEnrichment(data.summary);
+    } catch (error) {
+      setEnrichError((error as Error).message);
+    } finally {
+      setEnrichingWeb(false);
+    }
+  }
+
   async function handleManualExtractionSubmit(event: FormEvent) {
     event.preventDefault();
     if (!proposalId) return;
@@ -495,20 +534,27 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
         if (!patchRes.ok) throw new Error(patchData.error ?? 'Error al actualizar la propuesta.');
       }
 
+      const toList = (text: string) =>
+        text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+
       const extractedJson = {
         requester_name: manualRequesterName || null,
         requester_org: manualRequesterOrg || null,
         collaboration_type: manualCollaborationType || null,
         summary: manualSummary,
-        assets_offered: [],
+        assets_offered: toList(manualAssetsOffered),
         estimated_total_amount: manualAmount ? Number(manualAmount) : null,
         currency: 'EUR',
-        opportunities: [],
-        risks: [],
+        opportunities: toList(manualOpportunities),
+        risks: toList(manualRisks),
         website: manualWebsite || null,
         social_facebook: manualFacebook || null,
         social_instagram: manualInstagram || null,
         social_youtube: manualYoutube || null,
+        web_enrichment: manualWebEnrichment || null,
       };
 
       const res = await fetch('/api/extractions/manual', {
@@ -777,6 +823,46 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
             <input type="number" value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} style={{ width: '100%', padding: 6 }} />
           </div>
           <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Activos ofrecidos <span style={{ fontWeight: 400, color: '#888' }}>(uno por línea)</span>
+            </label>
+            <textarea
+              value={manualAssetsOffered}
+              onChange={(e) => setManualAssetsOffered(e.target.value)}
+              rows={4}
+              placeholder={'ej:\nEmbajador de marca (9.000€/12 meses)\n12 reels al año en redes sociales\n1 meet & greet con firma de autógrafos\nSesión fotográfica y cesión de derechos de imagen'}
+              style={{ width: '100%', padding: 6 }}
+            />
+            <p style={{ fontSize: 11, color: '#888', margin: '4px 0 0' }}>
+              Esto es lo que más usa la IA para puntuar (afinidad, potencial comercial, alcance...) — cuanto más
+              concreto, mejor la evaluación. Sin esto, casi todos los atributos saldrán en 0 por falta de evidencia.
+            </p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Oportunidades detectadas <span style={{ fontWeight: 400, color: '#888' }}>(uno por línea, opcional)</span>
+            </label>
+            <textarea
+              value={manualOpportunities}
+              onChange={(e) => setManualOpportunities(e.target.value)}
+              rows={2}
+              placeholder={'ej:\nRoyalty escalable sobre ventas de la línea de ropa cápsula\nCódigo de descuento propio para medir ventas atribuidas'}
+              style={{ width: '100%', padding: 6 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              Riesgos detectados en el documento <span style={{ fontWeight: 400, color: '#888' }}>(uno por línea, opcional)</span>
+            </label>
+            <textarea
+              value={manualRisks}
+              onChange={(e) => setManualRisks(e.target.value)}
+              rows={2}
+              placeholder={'ej:\nSin exclusividad — puede vestir otras marcas de su club\nSin mecanismo de reporting de resultados definido'}
+              style={{ width: '100%', padding: 6 }}
+            />
+          </div>
+          <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Web del solicitante</label>
             <input type="text" value={manualWebsite} onChange={(e) => setManualWebsite(e.target.value)} placeholder="https://..." style={{ width: '100%', padding: 6 }} />
           </div>
@@ -794,6 +880,39 @@ export function IntakeForm({ organizationId, defaultProvider, editing }: IntakeF
               <input type="text" value={manualYoutube} onChange={(e) => setManualYoutube(e.target.value)} placeholder="https://youtube.com/..." style={{ width: '100%', padding: 6 }} />
             </div>
           </div>
+
+          <div style={{ border: '1px solid var(--c-line)', borderRadius: 'var(--radius)', padding: 12, background: 'var(--c-light)' }}>
+            <button
+              type="button"
+              onClick={handleEnrichWithWeb}
+              disabled={enrichingWeb || !configuredProviders.some((p) => p.id === 'openai')}
+              className="btn btn-outline"
+              style={{ fontSize: 13 }}
+            >
+              {enrichingWeb ? 'Buscando en internet...' : '🔍 Enriquecer con búsqueda web (OpenAI)'}
+            </button>
+            <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
+              Busca información pública sobre el solicitante (nombre, web, redes) y la cruza con la marca elegida
+              arriba. Tiene coste y tarda unos segundos — úsalo cuando de verdad haya algo que buscar (una persona,
+              un club, un embajador), no en un simple evento sin figura pública detrás.
+              {!configuredProviders.some((p) => p.id === 'openai') && ' (Necesita OPENAI_API_KEY configurada.)'}
+            </p>
+            {enrichError && <p style={{ fontSize: 12, color: 'crimson', margin: '6px 0 0' }}>{enrichError}</p>}
+            {manualWebEnrichment && (
+              <div style={{ marginTop: 10 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Encontrado en la web <span style={{ fontWeight: 400, color: '#888' }}>(revisa y edita antes de guardar)</span>
+                </label>
+                <textarea
+                  value={manualWebEnrichment}
+                  onChange={(e) => setManualWebEnrichment(e.target.value)}
+                  rows={5}
+                  style={{ width: '100%', padding: 6 }}
+                />
+              </div>
+            )}
+          </div>
+
           <button type="submit" disabled={loading} className="btn btn-amber" style={{ width: 'fit-content' }}>
             {loading ? PHASE_LABEL[phase] : 'Guardar extracción y continuar →'}
           </button>
