@@ -50,6 +50,10 @@ async function askGeminiForJson(
 }
 
 export class GeminiProvider implements AIProvider {
+  async enrichWithWebSearch(): Promise<string> {
+    throw new Error('El enriquecimiento con búsqueda web todavía no está implementado para Gemini — usa OpenAI por ahora.');
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
