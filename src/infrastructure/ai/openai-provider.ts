@@ -172,6 +172,86 @@ export class OpenAiProvider implements AIProvider {
     return textParts.join('\n').trim() || 'La búsqueda no devolvió ningún resultado de texto.';
   }
 
+  async completeBrandProfile(
+    input: import('../../domain/shared/ai-provider').BrandProfileBasicInput,
+  ): Promise<import('../../domain/shared/ai-provider').BrandProfileFields> {
+    const client = getClient();
+
+    const facts = [
+      `Marca: ${input.brandName}`,
+      input.website ? `Web: ${input.website}` : null,
+      input.socialInstagram ? `Instagram: ${input.socialInstagram}` : null,
+      input.socialFacebook ? `Facebook: ${input.socialFacebook}` : null,
+      input.socialYoutube ? `YouTube: ${input.socialYoutube}` : null,
+      input.businessModel ? `Perfil comercial (dado por la empresa): ${input.businessModel}` : null,
+      input.targetAudience ? `Cliente potencial (dado por la empresa): ${input.targetAudience}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const prompt =
+      'Eres el Agente de Perfil de Marca de una plataforma de gestión de patrocinios. ' +
+      'A partir de la información básica de abajo, busca en internet (web y redes de la ' +
+      'marca) y propón el resto de su perfil estratégico para evaluar patrocinios. ' +
+      'IMPORTANTE: no inventes datos que no puedas fundamentar en lo que encuentres o en la ' +
+      'información básica dada — si algo no lo puedes fundamentar, deja el campo vacío ([] o ' +
+      'null) en vez de rellenarlo con una suposición genérica. Todo lo que devuelvas quedará ' +
+      'editable por una persona antes de guardarse, así que es preferible un campo vacío a uno ' +
+      'inventado. ' +
+      'Devuelve ÚNICAMENTE un objeto JSON con esta forma exacta: {"description": string|null, ' +
+      '"positioning": string|null, "toneOfVoice": string|null, "marketingObjectives": string[], ' +
+      '"evaluationFocus": string[], "recommendedActivations": string|null, ' +
+      '"negotiationGuidelines": string|null, "idealCollaborations": string[], ' +
+      '"avoidCollaborations": string[], "strategicPriorities": string[], "brandValues": string[], ' +
+      '"successExamples": string[], "redFlags": string[], "evaluationBias": string|null, ' +
+      '"preferredKpis": string[], "decisionStyle": string|null}.\n\n' +
+      `Información básica:\n${facts}`;
+
+    const response = await client.responses.create({
+      model: 'gpt-4o-mini',
+      input: prompt,
+      tools: [{ type: 'web_search_preview' }],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyResponse = response as any;
+    let text = typeof anyResponse.output_text === 'string' ? anyResponse.output_text.trim() : '';
+    if (!text) {
+      const textParts: string[] = [];
+      for (const item of anyResponse.output ?? []) {
+        for (const part of item.content ?? []) {
+          if (typeof part.text === 'string') textParts.push(part.text);
+        }
+      }
+      text = textParts.join('\n').trim();
+    }
+
+    // La búsqueda web puede envolver el JSON en texto o markdown a pesar de haberlo pedido
+    // limpio — se extrae el primer bloque {...} en vez de asumir que el string entero es JSON.
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('La IA no devolvió un JSON reconocible: ' + text.slice(0, 200));
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    return {
+      description: parsed.description ?? null,
+      positioning: parsed.positioning ?? null,
+      toneOfVoice: parsed.toneOfVoice ?? null,
+      marketingObjectives: Array.isArray(parsed.marketingObjectives) ? parsed.marketingObjectives : [],
+      evaluationFocus: Array.isArray(parsed.evaluationFocus) ? parsed.evaluationFocus : [],
+      recommendedActivations: parsed.recommendedActivations ?? null,
+      negotiationGuidelines: parsed.negotiationGuidelines ?? null,
+      idealCollaborations: Array.isArray(parsed.idealCollaborations) ? parsed.idealCollaborations : [],
+      avoidCollaborations: Array.isArray(parsed.avoidCollaborations) ? parsed.avoidCollaborations : [],
+      strategicPriorities: Array.isArray(parsed.strategicPriorities) ? parsed.strategicPriorities : [],
+      brandValues: Array.isArray(parsed.brandValues) ? parsed.brandValues : [],
+      successExamples: Array.isArray(parsed.successExamples) ? parsed.successExamples : [],
+      redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : [],
+      evaluationBias: parsed.evaluationBias ?? null,
+      preferredKpis: Array.isArray(parsed.preferredKpis) ? parsed.preferredKpis : [],
+      decisionStyle: parsed.decisionStyle ?? null,
+    };
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +

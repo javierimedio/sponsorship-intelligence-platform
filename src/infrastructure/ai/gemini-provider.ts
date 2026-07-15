@@ -58,6 +58,10 @@ export class GeminiProvider implements AIProvider {
     throw new Error('La recomendación estratégica de marca todavía no está implementada para Gemini — usa OpenAI por ahora.');
   }
 
+  async completeBrandProfile(): Promise<import('../../domain/shared/ai-provider').BrandProfileFields> {
+    throw new Error('Completar perfil de marca todavía no está implementado para Gemini — usa OpenAI por ahora.');
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +

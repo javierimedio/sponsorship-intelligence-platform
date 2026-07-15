@@ -75,6 +75,37 @@ export interface BrandStrategyInput {
   historicalBreakdown: { collaborationType: string; count: number; avgScore: number }[];
 }
 
+export interface BrandProfileBasicInput {
+  brandName: string;
+  website: string | null;
+  socialInstagram: string | null;
+  socialFacebook: string | null;
+  socialYoutube: string | null;
+  /** "Perfil comercial" en el lenguaje del formulario. */
+  businessModel: string | null;
+  /** "Cliente potencial" en el lenguaje del formulario. */
+  targetAudience: string | null;
+}
+
+export interface BrandProfileFields {
+  description: string | null;
+  positioning: string | null;
+  toneOfVoice: string | null;
+  marketingObjectives: string[];
+  evaluationFocus: string[];
+  recommendedActivations: string | null;
+  negotiationGuidelines: string | null;
+  idealCollaborations: string[];
+  avoidCollaborations: string[];
+  strategicPriorities: string[];
+  brandValues: string[];
+  successExamples: string[];
+  redFlags: string[];
+  evaluationBias: string | null;
+  preferredKpis: string[];
+  decisionStyle: string | null;
+}
+
 export interface AIProvider {
   /** Agente 1 — Extracción: lee uno o varios archivos (ej. un dossier convertido a varias
    *  imágenes, una por página) y devuelve datos estructurados combinando todos. */
@@ -112,6 +143,11 @@ export interface AIProvider {
    *  sugerir qué tipo de patrocinios/colaboraciones tienen sentido para esta marca. Nunca
    *  inventa tipos de colaboración fuera de lo razonable a partir de ideal_collaborations. */
   recommendForBrand(input: BrandStrategyInput): Promise<string>;
+
+  /** Botón explícito "Completar perfil con IA" — a partir de la información básica de una
+   *  marca (web, redes, perfil comercial, cliente potencial), investiga y propone el resto
+   *  del ADN de marca. Todo queda editable antes de guardar — nunca se persiste directo. */
+  completeBrandProfile(input: BrandProfileBasicInput): Promise<BrandProfileFields>;
 
   /** Agente 5 — ROI/Financials: estima el importe de cada concepto económico del catálogo. */
   extractFinancialLines(

@@ -25,9 +25,14 @@ export default async function BrandsPage() {
   return (
     <AppShell>
       <h1>Marcas</h1>
-      <p style={{ color: 'var(--c-mid)', marginTop: -8, marginBottom: 24 }}>
-        Recomendación estratégica de qué patrocinios/colaboraciones buscar para cada marca.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <p style={{ color: 'var(--c-mid)', margin: 0 }}>
+          Recomendación estratégica de qué patrocinios/colaboraciones buscar para cada marca.
+        </p>
+        <Link href="/brands/new" className="btn btn-amber">
+          + Nueva marca
+        </Link>
+      </div>
 
       <div className="kpi-grid">
         {(brands ?? []).map((b: any) => (

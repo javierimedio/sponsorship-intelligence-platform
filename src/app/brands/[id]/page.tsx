@@ -74,7 +74,12 @@ export default async function BrandDetailPage({ params }: PageProps) {
       <p>
         <Link href="/brands">← Volver a marcas</Link>
       </p>
-      <h1>{brand.name}</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ margin: 0 }}>{brand.name}</h1>
+        <Link href={`/brands/${brand.id}/edit`} className="btn btn-outline">
+          ✏️ Editar
+        </Link>
+      </div>
 
       {!context ? (
         <div className="card">
