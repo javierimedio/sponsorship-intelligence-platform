@@ -53,6 +53,15 @@ export interface ActivationSuggestionResult {
   priority: 'Alta' | 'Media' | 'Baja';
 }
 
+export interface WebEnrichmentInput {
+  requesterName: string | null;
+  website: string | null;
+  socialInstagram: string | null;
+  socialFacebook: string | null;
+  socialYoutube: string | null;
+  brandName: string | null;
+}
+
 export interface AIProvider {
   /** Agente 1 — Extracción: lee uno o varios archivos (ej. un dossier convertido a varias
    *  imágenes, una por página) y devuelve datos estructurados combinando todos. */
@@ -78,6 +87,12 @@ export interface AIProvider {
     catalogItems: ActivationCatalogItemInput[],
     channels: ChannelInput[],
   ): Promise<ActivationSuggestionResult[]>;
+
+  /** Botón explícito "Enriquecer con búsqueda web" — nunca automático, por el coste y el
+   *  tiempo de cada búsqueda. Devuelve texto libre (no JSON estructurado) para que la
+   *  persona lo revise y lo edite antes de guardarlo — igual de "no inventes" que el
+   *  resto: si no encuentra nada fiable, debe decirlo, no rellenar con suposiciones. */
+  enrichWithWebSearch(input: WebEnrichmentInput): Promise<string>;
 
   /** Agente 5 — ROI/Financials: estima el importe de cada concepto económico del catálogo. */
   extractFinancialLines(
