@@ -123,6 +123,55 @@ export class OpenAiProvider implements AIProvider {
     return textParts.join('\n').trim() || 'La búsqueda no devolvió ningún resultado de texto.';
   }
 
+  async recommendForBrand(input: import('../../domain/shared/ai-provider').BrandStrategyInput): Promise<string> {
+    const client = getClient();
+
+    const historyText = input.historicalBreakdown.length
+      ? input.historicalBreakdown
+          .map((h) => `- ${h.collaborationType}: ${h.count} propuesta(s), score medio ${Math.round(h.avgScore * 100)}%`)
+          .join('\n')
+      : 'Todavía no hay histórico suficiente de propuestas evaluadas para esta marca.';
+
+    const prompt =
+      'Eres el Agente Estratégico de una plataforma de gestión de patrocinios. ' +
+      `Para la marca "${input.brandName}", recomienda qué tipos de patrocinios/colaboraciones ` +
+      'debería buscar activamente, apoyándote en su ADN de marca y en el histórico real de ' +
+      'abajo. ' +
+      'IMPORTANTE: no inventes tipos de colaboración fuera de lo razonable a partir de ' +
+      '"colaboraciones ideales" — puedes proponer variantes o combinaciones concretas de esas ' +
+      'categorías, pero no inventes una categoría de patrocinio sin relación con el perfil de ' +
+      'la marca. Si el histórico es insuficiente, dilo explícitamente y apóyate más en el ADN ' +
+      'de marca y en tendencias generales verificables por búsqueda web. Cita de dónde sale ' +
+      'cada dato que aportes de fuera del contexto que se te da. ' +
+      'Responde en texto plano en español, en 3-5 párrafos breves o una lista — nada de JSON.\n\n' +
+      `Posicionamiento: ${input.positioning ?? 'no especificado'}\n` +
+      `Colaboraciones ideales: ${input.idealCollaborations?.join(', ') ?? 'no especificadas'}\n` +
+      `Colaboraciones a evitar: ${input.avoidCollaborations?.join(', ') ?? 'no especificadas'}\n` +
+      `Prioridades estratégicas: ${input.strategicPriorities?.join(', ') ?? 'no especificadas'}\n` +
+      `Sesgo de evaluación: ${input.evaluationBias ?? 'no especificado'}\n` +
+      `Estilo de decisión: ${input.decisionStyle ?? 'no especificado'}\n\n` +
+      `Histórico real de propuestas evaluadas para esta marca:\n${historyText}`;
+
+    const response = await client.responses.create({
+      model: 'gpt-4o-mini',
+      input: prompt,
+      tools: [{ type: 'web_search_preview' }],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyResponse = response as any;
+    if (typeof anyResponse.output_text === 'string' && anyResponse.output_text.trim()) {
+      return anyResponse.output_text.trim();
+    }
+    const textParts: string[] = [];
+    for (const item of anyResponse.output ?? []) {
+      for (const part of item.content ?? []) {
+        if (typeof part.text === 'string') textParts.push(part.text);
+      }
+    }
+    return textParts.join('\n').trim() || 'La búsqueda no devolvió ningún resultado de texto.';
+  }
+
   async extractProposalData(files: { buffer: Buffer; mediaType: string }[]): Promise<Record<string, unknown>> {
     const system =
       'Eres el Agente de Extracción de una plataforma de gestión de patrocinios. ' +
